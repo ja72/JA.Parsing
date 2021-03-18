@@ -37,6 +37,13 @@ namespace JA.Parsing
         /// </summary>
         /// <param name="parameters">The list of variable values.</param>
         public abstract double Eval(params (string sym, double val)[] parameters);
+        public VariableExpr[] GetVariables()
+        {
+            var list = new List<VariableExpr>();
+            AddVariables(list);
+            return list.ToArray();
+        }
+        protected internal abstract void AddVariables(List<VariableExpr> variables);
         /// <summary>
         /// Substitutes an expression each time the target (or variable) is found in the whole expression tree.
         /// </summary>
@@ -55,28 +62,33 @@ namespace JA.Parsing
         /// </summary>
         /// <param name="variable">The variable.</param>
         /// <example>
-        ///   <br />
-        ///   <code title="Partial Derivative Example">Expr x = "x";
-        /// Expr y = x^2;
-        /// Expr yp = y.Partial(x);
+        ///   <code>Expr x = "x";
+        /// Expr y = (x^2).Partial(x);
+        /// </code>
         /// </example>
         public abstract Expr Partial(VariableExpr variable);
         public Expr Partial(string symbol) => Partial(Variable(symbol));
 
-        /// <summary>Caculate the total derivative using the chain rule.</summary>
+        /// <summary>Calculate the total derivative using the chain rule.</summary>
         /// <param name="variables">The variables to differentiate for.</param>
         public Expr Derivative(params VariableExpr[] variables)
         {
             Expr sum = 0;
             for (int i = 0; i < variables.Length; i++)
             {
-                sum += Partial(variables[i]) * variables[i].Derivative();
+                var x = variables[i];
+                var xp = x.Rate();
+                sum += Partial(x) * xp;
             }
             return sum;
         }
         public Expr Derivative(params string[] variables)
         {
             return Derivative(variables.Select((sym) => Variable(sym)).ToArray());
+        }
+        public Expr TotalDerivative()
+        {
+            return Derivative(GetVariables());
         }
         #region Variables & Constants
 
@@ -168,18 +180,22 @@ namespace JA.Parsing
             {
                 if (lm.Left.Equals(rm.Left))
                 {
+                    // (x*y)+(x*z) = x*(y+z)
                     return lm.Left*(lm.Right+rm.Right);
                 }
                 if (lm.Right.Equals(rm.Right))
                 {
+                    // (x*y)+(z*y) = (x+z)*y
                     return (lm.Left+rm.Left)*lm.Right;
                 }
                 if (lm.Left.Equals(rm.Right))
                 {
+                    // (x*y)+(z*x) = x*(y+z)
                     return lm.Left*(lm.Right+rm.Left);
                 }
                 if (lm.Right.Equals(rm.Left))
                 {
+                    // (x*y)+(y*z) = (x+z)*y
                     return (lm.Left+rm.Right)*lm.Right;
                 }
             }
@@ -188,6 +204,7 @@ namespace JA.Parsing
             {
                 if (ld.Right.Equals(rd.Right))
                 {
+                    // (x/y)+(z/y) = (x+z)/y
                     return (ld.Left+rd.Left)/ld.Right;
                 }
             }
@@ -215,18 +232,22 @@ namespace JA.Parsing
             {
                 if (lm.Left.Equals(rm.Left))
                 {
+                    // (x*y)-(x*z) = x*(y-z)
                     return lm.Left*(lm.Right-rm.Right);
                 }
                 if (lm.Right.Equals(rm.Right))
                 {
+                    // (x*y)-(z*y) = (x-z)*y
                     return (lm.Left-rm.Left)*lm.Right;
                 }
                 if (lm.Left.Equals(rm.Right))
                 {
+                    // (x*y)-(z*x) = x*(y-z)
                     return lm.Left*(lm.Right-rm.Left);
                 }
                 if (lm.Right.Equals(rm.Left))
                 {
+                    // (x*y)-(y*z) = (x-z)*y
                     return (lm.Left-rm.Right)*lm.Right;
                 }
             }
@@ -235,6 +256,7 @@ namespace JA.Parsing
             {
                 if (ld.Right.Equals(rd.Right))
                 {
+                    // (x/y)-(z/y) = (x-z)/y
                     return (ld.Left-rd.Left)/ld.Right;
                 }
             }
@@ -250,36 +272,32 @@ namespace JA.Parsing
             {
                 return lc.Value * rc.Value;
             }
-            if (left is ConstExpr lc2 && lc2.Value<1)
+            if (left is ConstExpr lc2 && Math.Abs(lc2.Value)<1)
             {
                 return right/(1/lc2.Value);
             }
-            if (right is ConstExpr rc2 && rc2.Value<1)
+            if (right is ConstExpr rc2 && Math.Abs(rc2.Value)<1)
             {
                 return left/(1/rc2.Value);
             }
             if (right is UnaryOperatorExpr rn && rn.Op=="-")
             {
+                // x*(-y) = -(x*y)
                 return -(left * rn.Argument);
             }
             if (left is UnaryOperatorExpr ln && ln.Op=="-")
             {
+                // (-x)*y = -(x*y)
                 return -(ln.Argument * right);
-            }
-            if (right is UnaryFunctionExpr ri && ri.Name=="inv")
-            {
-                return left / ri.Argument;
-            }
-            if (left is UnaryFunctionExpr li && li.Name=="inv")
-            {
-                return right/li.Argument;
             }
             if (left is BinaryOperatorExpr ld && ld.Op=="/")
             {
+                // (x/y)*z = (x*z)/y
                 return (ld.Left * right)/ld.Right;
             }
             if (right is BinaryOperatorExpr rd && rd.Op=="/")
             {
+                // x*(y/z) = (x*y)/z
                 return (left * rd.Left)/rd.Right;
             }
             if (left is BinaryFunctionExpr lp && lp.Name=="pow"
@@ -287,6 +305,7 @@ namespace JA.Parsing
             {
                 if (lp.Left.Equals(rp.Left))
                 {
+                    // (x^n)*(x^m) = x^(n+m)
                     return Power(lp.Left, lp.Right+rp.Right);
                 }
             }
@@ -301,36 +320,58 @@ namespace JA.Parsing
             {
                 return lc1.Value/rc1.Value;
             }
-            if (left is ConstExpr lc3 && lc3.Value<1)
+            if (left is ConstExpr lc3 && Math.Abs(lc3.Value)<1)
             {
                 return 1/((1/lc3.Value)*right);
             }
-            if (right is ConstExpr rc2 && rc2.Value<1)
+            if (right is ConstExpr rc2 && Math.Abs(rc2.Value)<1)
             {
                 return (1/rc2.Value)*left;
             }
+            if (left is UnaryFunctionExpr ls && ls.Name=="sqr")
+            {                
+                if (right.Equals(ls.Argument))
+                {
+                    // x^2/x = x
+                    return right;
+                }
+            }
+            if (right is UnaryFunctionExpr rs && rs.Name=="sqr")
+            {
+                if (left.Equals(rs.Argument))
+                {
+                    // x/x^2 = 1/x
+                    return 1/left;
+                }
+            }
             if (right is UnaryOperatorExpr rn && rn.Op=="-")
             {
+                // x/(-y) = -(x/y)
                 return -(left/rn.Argument);
             }
             if (left is UnaryOperatorExpr ln && ln.Op=="-")
             {
+                // (-x)/y = -(x/y)
                 return -(ln.Argument/right);
             }
             if (right is UnaryFunctionExpr ri && ri.Name=="inv")
             {
+                // x/(1/y) = x*y
                 return left * ri.Argument;
             }
             if (left is UnaryFunctionExpr li && li.Name=="inv")
             {
+                // (1/x)/y = 1/(x*y)
                 return 1/(li.Argument * right);
             }
             if (left is BinaryOperatorExpr ld && ld.Op=="/")
             {
+                // (x/y)/z = x/(y*x)
                 return (ld.Left * right)/ld.Right;
             }
             if (right is BinaryOperatorExpr rd && rd.Op=="/")
             {
+                // x/(y/z) = (x*z)/y
                 return (left * rd.Right)/rd.Left;
             }
             if (left is BinaryFunctionExpr lp && lp.Name=="pow"
@@ -338,6 +379,7 @@ namespace JA.Parsing
             {
                 if (lp.Left.Equals(rp.Left))
                 {
+                    // (x^n)/(x^m) = x^(n-m)
                     return Power(lp.Left, lp.Right-rp.Right);
                 }
             }
@@ -384,15 +426,13 @@ namespace JA.Parsing
         public static Expr operator +(Expr lhs, Expr rhs) => Add(lhs, rhs);
         public static Expr operator -(Expr lhs, Expr rhs) => Subtract(lhs, rhs);
         public static Expr operator *(Expr lhs, Expr rhs) => Multiply(lhs, rhs);
-        public static Expr operator /(double lhs, Expr rhs) => lhs*Inv(rhs);
+        public static Expr operator /(double lhs, Expr rhs) => Divide(lhs,rhs);
         public static Expr operator /(Expr lhs, Expr rhs) => Divide(lhs, rhs);
         public static Expr operator ^(Expr lhs, double rhs) => Raise(lhs, rhs);
         public static Expr operator ^(Expr lhs, Expr rhs) => Power(lhs, rhs);
         #endregion
 
         #region Unary Functions
-        public static Expr Pi(Expr right) => new UnaryFunctionExpr("pi", right);
-        public static Expr Inv(Expr right) => new UnaryFunctionExpr("inv", right);
         public static Expr Abs(Expr right) => new UnaryFunctionExpr("abs", right);
         public static Expr Sign(Expr right) => new UnaryFunctionExpr("sign", right);
         public static Expr Exp(Expr right) => new UnaryFunctionExpr("exp", right);
@@ -404,7 +444,6 @@ namespace JA.Parsing
         public static Expr Floor(Expr right) => new UnaryFunctionExpr("floor", right);
         public static Expr Ceil(Expr right) => new UnaryFunctionExpr("ceil", right);
         public static Expr Round(Expr right) => new UnaryFunctionExpr("round", right);
-
         #endregion
 
         #region Trigonometry
@@ -420,6 +459,10 @@ namespace JA.Parsing
         public static Expr Asinh(Expr right) => new UnaryFunctionExpr("asinh", right);
         public static Expr Acosh(Expr right) => new UnaryFunctionExpr("acosh", right);
         public static Expr Atanh(Expr right) => new UnaryFunctionExpr("atanh", right);
+        #endregion
+
+        #region Auxiliary Functions
+        public static Expr Inv(Expr right) => 1/right;
         #endregion
 
         #region String Handling

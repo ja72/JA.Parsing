@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Diagnostics;
+using System.Reflection;
+using System.Collections.ObjectModel;
 
 namespace JA.Parsing
 {
@@ -11,6 +15,10 @@ namespace JA.Parsing
         }
         public static explicit operator double(ConstExpr e) => e.Value;
         public double Value { get; }
+        protected internal override void AddVariables(List<VariableExpr> variables)
+        {
+            // nothing to add
+        }
         public override double Eval(params (string sym, double val)[] parameters)
         {
             return Value;
@@ -143,8 +151,16 @@ namespace JA.Parsing
             defined[symbol] = this;
         }
 
-        public static implicit operator VariableExpr(string symbol) => Expr.Variable(symbol);
+        public static implicit operator VariableExpr(string symbol) => Variable(symbol);
         public static explicit operator string(VariableExpr e) => e.Symbol;
+        protected internal override void AddVariables(List<VariableExpr> variables)
+        {
+            if (!variables.Contains(this))
+            {
+                variables.Add(this);
+            }
+        }
+
         public string Symbol { get; }
 
         public override double Eval(params (string sym, double val)[] parameters)
@@ -180,7 +196,22 @@ namespace JA.Parsing
             return 0;
         }
 
-        public VariableExpr Derivative(char dot = 'p')
+        /// <summary>
+        /// Defines a new variable for the time rate of this variable.
+        /// </summary>
+        /// <param name="dot">
+        /// The character to use instead of dot. Default is <c>'p'</c>.
+        /// </param>
+        /// <remarks>
+        /// Appends a <c>'p'</c> character to the variable name. If the
+        /// variable contains and underscore <c>'_'</c> the appending
+        /// happens before the underscore.
+        /// </remarks>
+        /// <example>
+        ///   <br />
+        ///     <code>xp = x.Rate();</code>
+        /// </example>
+        public VariableExpr Rate(char dot = 'p')
         {
             var parts = Symbol.Split('_');
             parts[0] += dot;

@@ -45,6 +45,11 @@ namespace JA.Parsing
         public Expr Right { get; }
         protected string Key { get; }
         public Func<double, double, double> Function { get; }
+        protected internal override void AddVariables(List<VariableExpr> variables)
+        {
+            Left.AddVariables(variables);
+            Right.AddVariables(variables);
+        }
 
         public override double Eval(params (string sym, double val)[] parameters)
         {
@@ -59,7 +64,7 @@ namespace JA.Parsing
             {
                 case "+": return xp+yp;
                 case "-": return xp-yp;
-                case "*": return y*xp+x*yp;
+                case "*": return xp*y+x*yp;
                 case "/": return (y*xp-x*yp)/(y^2);
                 case "^": 
                 case "pow": return (x^(y-1))*(x*Ln(x)*yp+y*xp);

@@ -10,8 +10,6 @@ namespace JA.Parsing
         {
             ["+"]       = (x) => x,
             ["-"]       = (x) => -x,
-            ["pi"]      = (x) => Math.PI * x,
-            ["inv"]     = (x) => 1/x,
             ["abs"]     = (x) => Math.Abs(x),
             ["sign"]    = (x) => Math.Sign(x),
             ["exp"]     = (x) => Math.Exp(x),
@@ -62,6 +60,11 @@ namespace JA.Parsing
         public Expr Argument { get; }
         protected string Key { get; }
 
+        protected internal override void AddVariables(List<VariableExpr> variables)
+        {
+            Argument.AddVariables(variables);
+        }
+
         public override double Eval(params (string sym, double val)[] parameters)
         {
             return Function(Argument.Eval(parameters));
@@ -74,14 +77,12 @@ namespace JA.Parsing
             {
                 case "+": return xp;
                 case "-": return -xp;
-                case "pi": return Math.PI*xp;
-                case "inv": return -xp/(x^2);
                 case "abs": return Sign(x)*xp;
                 case "sign": return 0;
                 case "exp": return Exp(x)*xp;
                 case "ln": return xp/x;
-                case "sqr": return 2*x*xp;
-                case "cub": return 3*(x^2)*xp;
+                case "sqr": return x*(2*xp);
+                case "cub": return (x^2)*(3*xp);
                 case "sqrt": return xp/(2*Sqrt(x));
                 case "cbrt": return xp/(3*(x^(2.0/3)));
                 case "floor": return 0;
