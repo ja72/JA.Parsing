@@ -14,7 +14,7 @@ namespace JA.Parsing
         Subtract,
         Multiply,
         Divide,
-        Power,
+        Power,          // new addition, JA
         OpenParens,
         CloseParens,
         Comma,
@@ -26,7 +26,7 @@ namespace JA.Parsing
     /// Code taken from:
     /// https://github.com/toptensoftware/SimpleExpressionEngine
     /// </summary>
-    public class Tokenizer : IEnumerator<TokenNode>, IEnumerable<TokenNode>
+    public sealed class Tokenizer : IEnumerator<TokenNode>, IEnumerable<TokenNode>
     {
         public Tokenizer(string expression) 
         {

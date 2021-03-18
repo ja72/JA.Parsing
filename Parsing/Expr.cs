@@ -427,9 +427,7 @@ namespace JA.Parsing
             => ToString("g");
         public string ToString(string formatting)
             => ToString(formatting, null);
-#pragma warning disable S927 // Parameter names should match base declaration and other partial definitions
         public abstract string ToString(string format, IFormatProvider provider);
-#pragma warning restore S927 // Parameter names should match base declaration and other partial definitions 
         #endregion
 
         #region IEquatable Members

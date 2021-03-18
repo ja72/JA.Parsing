@@ -42,7 +42,7 @@ namespace JA.Parsing
             while (true)
             {
                 // Work out the operator
-                string op = null;
+                string op;
                 switch (_tokenizer.Current.Token)
                 {
                     case Token.Add:
@@ -86,7 +86,7 @@ namespace JA.Parsing
             while (true)
             {
                 // Work out the operator
-                string op = null;
+                string op;
                 switch (_tokenizer.Current.Token)
                 {
                     case Token.Multiply:
@@ -128,7 +128,7 @@ namespace JA.Parsing
             while (true)
             {
                 // Work out the operator
-                string op = null;
+                string op;
                 switch (_tokenizer.Current.Token)
                 {
                     case Token.Power:
