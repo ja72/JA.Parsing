@@ -12,6 +12,12 @@ namespace JA
     {
         static void Main(string[] args)
         {
+            Console.WriteLine("Defined Constants:");
+            foreach (var (sym, val) in Expr.Constants)
+            {
+                Console.WriteLine($"{sym,5} = {val}");
+            }
+            Console.WriteLine();
             TestParse1();
             TestParse2();
             TestParse3();
@@ -24,6 +30,9 @@ namespace JA
 
         static void TestParse1()
         {
+            var pi = Expr.Const("pi");
+            Console.WriteLine($"π={pi.Value}");
+
             var s_input = "x+y+z";
             var s_expr = Expr.Parse(s_input);
             Console.WriteLine(s_expr);
@@ -54,18 +63,19 @@ namespace JA
             Console.WriteLine($"wx={wx}");
             var wy = w.Partial(y);
             Console.WriteLine($"wy={wy}");
-            var wp = w.Derivative(x, y);
+            var wp = w.TotalDerivative(x, y);
             Console.WriteLine($"wp={wp}");
 
-            var f_input = "(x^2-1)/(x^2+1)";
+            var f_input = "(x^2-pi)/(x^2+pi)";
             Console.WriteLine($"input={f_input}");
             var f = Expr.Parse(f_input);
             Console.WriteLine($"f={f}");
+            Console.WriteLine($"f(0.5)={f.Eval(("x", 0.5))}");
 
             var df = f.Partial(x);
             Console.WriteLine($"df={df}");
 
-            var fp = f.Derivative(x);
+            var fp = f.TotalDerivative();
             Console.WriteLine($"fp={fp}");
 
             Console.WriteLine();
@@ -73,8 +83,6 @@ namespace JA
         static void TestParse3()
         {
             VariableExpr q = "q", r = "r";
-            VariableExpr qp = q.Rate(), rp = r.Rate();
-            VariableExpr qpp = qp.Rate(), rpp = rp.Rate();
 
             Expr x = r*Expr.Cos(q), y = r*Expr.Sin(q);
             Console.WriteLine($"pos = [{x},{y}]");

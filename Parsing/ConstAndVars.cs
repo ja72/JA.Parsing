@@ -172,11 +172,7 @@ namespace JA.Parsing
                     return val;
                 }
             }
-            if (Variables.ContainsKey(Symbol))
-            {
-                return Variables[Symbol];
-            }
-            return 0;
+            throw new ArgumentException($"Variable {Symbol} not defined in arguments.", nameof(parameters));
         }
         public override string ToString(string format, IFormatProvider provider)
         {

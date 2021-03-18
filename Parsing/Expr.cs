@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime;
@@ -9,11 +10,15 @@ namespace JA.Parsing
 {
     public abstract class Expr : IFormattable, IEquatable<Expr>
     {
-        private static readonly Dictionary<string, double> variables = new Dictionary<string, double>();
-        public static IReadOnlyDictionary<string, double> Variables => variables;
+        public static IReadOnlyCollection<(string sym, double val)> Constants
+            => new ReadOnlyCollection<(string sym, double val)>(NamedConstantExpr.Defined.Select((item) => (item.Key, item.Value.Value)).ToList());
 
-        public static implicit operator Expr(double x) => Const(x);
+        public static implicit operator Expr(double x) => Number(x);
         public static implicit operator Expr(string expr) => Parse(expr);
+        public static double operator |(Expr expr, (string sym, double val) arg)
+        {
+            return expr.Eval(arg);
+        }
 
         #region Convenience Helpers
 
@@ -32,6 +37,15 @@ namespace JA.Parsing
 
         #endregion
 
+
+        public Func<double> GetFunction() => () => Eval();
+        public Func<double, double> GetFunction(string var1) => (x) => Eval((var1, x));
+        public Func<double, double, double> GetFunction(string var1, string var2) => (x,y) => Eval((var1,x),(var2,y));
+
+        public double this[params (string sym, double val)[] parameters]
+        {
+            get => Eval(parameters);
+        }
         /// <summary>
         /// Evaluates the expression with specified variable,value pairs
         /// </summary>
@@ -71,38 +85,66 @@ namespace JA.Parsing
 
         /// <summary>Calculate the total derivative using the chain rule.</summary>
         /// <param name="variables">The variables to differentiate for.</param>
-        public Expr Derivative(params VariableExpr[] variables)
+        /// <param name="rates">The derivative of the variables</param>
+        public Expr TotalDerivative(VariableExpr[] variables, Expr[] rates)
         {
             Expr sum = 0;
             for (int i = 0; i < variables.Length; i++)
             {
                 var x = variables[i];
-                var xp = x.Rate();
+                var xp = rates[i];
                 sum += Partial(x) * xp;
             }
             return sum;
         }
-        public Expr Derivative(params string[] variables)
+        public Expr TotalDerivative(params VariableExpr[] variables)
         {
-            return Derivative(variables.Select((sym) => Variable(sym)).ToArray());
+            var rates = variables.Select((x) => x.Rate()).ToArray();
+            return TotalDerivative(variables, rates);
+        }
+        public Expr TotalDerivative(params string[] variables)
+        {
+            return TotalDerivative(variables.Select((sym) => Variable(sym)).ToArray());
         }
         public Expr TotalDerivative()
         {
-            return Derivative(GetVariables());
+            var variables = GetVariables();
+            var rates = variables.Select((x) => x.Rate()).ToArray();
+            return TotalDerivative(variables, rates);
+        }
+        public Expr TotalDerivative(params (VariableExpr x, Expr xp)[] variables)
+        {
+            Expr sum = 0;
+            for (int i = 0; i < variables.Length; i++)
+            {
+                var x = variables[i].x;
+                var xp = variables[i].xp;
+                sum += Partial(x) * xp;
+            }
+            return sum;
         }
         #region Variables & Constants
 
         /// <summary>Define a constant value.</summary>
         /// <param name="value">The value.</param>
-        public static ConstExpr Const(double value) => new ConstExpr(value);
+        public static ConstExpr Number(double value) => new ConstExpr(value);
         /// <summary>Defined a named constant, for example 'pi=3.141.."</summary>
         /// <param name="name">The name.</param>
         /// <param name="value">The value.</param>
-        public static NamedConstantExpr Const(string name, double value)
+        public static Expr Const(string name, double value)
         {
             return new NamedConstantExpr(name, value);
         }
-
+        /// <summary>
+        /// Retrieve a named constant from its name
+        /// </summary>
+        /// <param name="name">The name</param>
+        /// <example>
+        /// <code>
+        /// Expr pi = Const("pi");
+        /// </code>
+        /// </example>
+        public static NamedConstantExpr Const(string name) => NamedConstantExpr.Defined[name];
         public static Expr VariableOrConst(string name)
         {
             if (NamedConstantExpr.Defined.ContainsKey(name))
@@ -130,17 +172,17 @@ namespace JA.Parsing
             return new VariableExpr(symbol);
         }
 
-        public static readonly ConstExpr Zero = Const(0);
-        public static readonly ConstExpr One = Const(1);
-        public static readonly NamedConstantExpr Inf = new NamedConstantExpr("inf", double.PositiveInfinity);
-        public static readonly NamedConstantExpr Nan = new NamedConstantExpr("nan", double.NaN);
-        public static readonly NamedConstantExpr PI = new NamedConstantExpr("pi", Math.PI);
+        public static readonly ConstExpr Zero = Number(0);
+        public static readonly ConstExpr One = Number(1);
+        public static readonly NamedConstantExpr Inf   = new NamedConstantExpr("inf", double.PositiveInfinity);
+        public static readonly NamedConstantExpr Nan   = new NamedConstantExpr("nan", double.NaN);
+        public static readonly NamedConstantExpr PI    = new NamedConstantExpr("pi", Math.PI);
         public static readonly NamedConstantExpr DivPI = new NamedConstantExpr("divpi", 1/Math.PI);
-        public static readonly NamedConstantExpr E = new NamedConstantExpr("e", Math.E);
-        public static readonly NamedConstantExpr Φ = new NamedConstantExpr("Φ", (1+Math.Sqrt(5))/2);
-        public static readonly NamedConstantExpr Deg = new NamedConstantExpr("deg", Math.PI/180);
-        public static readonly NamedConstantExpr Reg = new NamedConstantExpr("rad", 180/Math.PI);
-        public static readonly NamedConstantExpr Rpm = new NamedConstantExpr("rpm", 2*Math.PI/60);
+        public static readonly NamedConstantExpr E     = new NamedConstantExpr("e", Math.E);
+        public static readonly NamedConstantExpr Φ     = new NamedConstantExpr("Φ", (1+Math.Sqrt(5))/2);
+        public static readonly NamedConstantExpr Deg   = new NamedConstantExpr("deg", Math.PI/180);
+        public static readonly NamedConstantExpr Reg   = new NamedConstantExpr("rad", 180/Math.PI);
+        public static readonly NamedConstantExpr Rpm   = new NamedConstantExpr("rpm", 2*Math.PI/60);
         #endregion
 
         #region Arithmetic Functions 
@@ -470,7 +512,9 @@ namespace JA.Parsing
             => ToString("g");
         public string ToString(string formatting)
             => ToString(formatting, null);
+#pragma warning disable S927 // Parameter names should match base declaration and other partial definitions
         public abstract string ToString(string format, IFormatProvider provider);
+#pragma warning restore S927 // Parameter names should match base declaration and other partial definitions
         #endregion
 
         #region IEquatable Members
@@ -493,7 +537,7 @@ namespace JA.Parsing
             }
             if (obj is double x)
             {
-                return Equals(Const(x));
+                return Equals(Number(x));
             }
             if (obj is string sym)
             {

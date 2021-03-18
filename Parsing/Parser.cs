@@ -197,7 +197,7 @@ namespace JA.Parsing
             // Is it a number?
             if (_tokenizer.Current.Token == Token.Number)
             {
-                var node = Expr.Const(_tokenizer.Current.Number);
+                var node = Expr.Number(_tokenizer.Current.Number);
                 _tokenizer.MoveNext();
                 return node;
             }
