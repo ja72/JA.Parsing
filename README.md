@@ -11,7 +11,8 @@ An expression parser for `C#` with easy compilation into delegate functions for 
     Console.WriteLine($"input={f_input}");
     var f = Expr.Parse(f_input);
     Console.WriteLine($"f={f}");
-    Console.WriteLine($"f(0.5)={f.Eval(("x", 0.5))}");
+	var fx = f.GetFunction("x");
+    Console.WriteLine($"f(0.5)={fx(0.5)}");
 
     var df = f.Partial(x);
     Console.WriteLine($"df={df}");
@@ -81,13 +82,13 @@ The equivalent IL code to the function evaluation looks something like this
 ```cil
 ldarg.0        // load 1st argument
 ldc_R8.(2)     // load value 2
-div            // divide values
-call Math.Sin()  // call sine function
-ldc_R8.(0.5)   // load 0.5
-mul            // multiply values
-ldc_R8.(0.5)   // load 0.5
-add            // add values
-ret            // return result
+div
+call Math.Sin()
+ldc_R8.(0.5)
+mul
+ldc_R8.(0.5)
+add
+ret
 ```
 
 As you can see each node in the expression tree only contributes a minimal amount of IL code and the overall compiled function produces optimized calculations.
