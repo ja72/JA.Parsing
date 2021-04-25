@@ -44,12 +44,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Parsing\ArrayExpr.cs" />
     <Compile Include="Parsing\BinaryExpr.cs" />
-    <Compile Include="Parsing\ConstAndVars.cs" />
+    <Compile Include="Parsing\ConstExpr.cs" />
     <Compile Include="Parsing\Expr.cs" />
     <Compile Include="Parsing\UnaryExpr.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="Parsing\Parser.cs" />
+    <Compile Include="Parsing\VariableExpr.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Parsing\Tokenizer.cs" />

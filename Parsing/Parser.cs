@@ -1,14 +1,20 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Runtime.Serialization;
 using System.IO;
 using System.Text;
-using static System.Math;
-using System.Security.Cryptography.X509Certificates;
-using System.Runtime.Serialization;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime;
+using System.Reflection;
+using System.Reflection.Emit;
+
 
 namespace JA.Parsing
 {
+    using static System.Math;
+
     public class Parser
     {
 
@@ -42,14 +48,14 @@ namespace JA.Parsing
             while (true)
             {
                 // Work out the operator
-                string op;
+                BinaryOp op;
                 switch (_tokenizer.Current.Token)
                 {
                     case Token.Add:
-                        op = "+";
+                        op = BinaryOp.Add;
                         break;
                     case Token.Subtract:
-                        op = "-";
+                        op = BinaryOp.Subtract;
                         break;
                     default:
                         // Binary operator not found.
@@ -65,11 +71,9 @@ namespace JA.Parsing
                 // Create a binary node and use it as the left-hand side from now on
                 switch (op)
                 {
-                    case "+":
-                        lhs = Expr.Add(lhs, rhs);
-                        break;
-                    case "-":
-                        lhs = Expr.Subtract(lhs, rhs);
+                    case BinaryOp.Add:
+                    case BinaryOp.Subtract:
+                        lhs = Expr.Binary(op, lhs, rhs);
                         break;
                     default:
                         throw new NotSupportedException();
@@ -86,14 +90,14 @@ namespace JA.Parsing
             while (true)
             {
                 // Work out the operator
-                string op;
+                BinaryOp op;
                 switch (_tokenizer.Current.Token)
                 {
                     case Token.Multiply:
-                        op = "*";
+                        op = BinaryOp.Multiply;
                         break;
                     case Token.Divide:
-                        op = "/";
+                        op = BinaryOp.Divide;
                         break;
                     default:
                         // Binary operator not found.
@@ -109,11 +113,9 @@ namespace JA.Parsing
                 // Create a binary node and use it as the left-hand side from now on
                 switch (op)
                 {
-                    case "*":
-                        lhs = Expr.Multiply(lhs, rhs);
-                        break;
-                    case "/":
-                        lhs = Expr.Divide(lhs, rhs);
+                    case BinaryOp.Multiply:
+                    case BinaryOp.Divide:
+                        lhs = Expr.Binary(op, lhs, rhs);
                         break;
                     default:
                         throw new NotSupportedException();
@@ -128,11 +130,11 @@ namespace JA.Parsing
             while (true)
             {
                 // Work out the operator
-                string op;
+                BinaryOp op;
                 switch (_tokenizer.Current.Token)
                 {
                     case Token.Power:
-                        op = "^";
+                        op = BinaryOp.Pow;
                         break;
                     default:
                         // Binary operator not found.
@@ -148,8 +150,8 @@ namespace JA.Parsing
                 // Create a binary node and use it as the left-hand side from now on
                 switch (op)
                 {
-                    case "^":
-                        lhs = Expr.Power(lhs, rhs);
+                    case BinaryOp.Pow:
+                        lhs = Expr.Binary(op, lhs, rhs);
                         break;
                     default:
                         throw new NotSupportedException();
@@ -182,7 +184,7 @@ namespace JA.Parsing
                     var rhs = ParseUnary();
 
                     // Create unary node
-                    return new UnaryOperatorExpr("-", rhs);
+                    return Expr.Unary(UnaryOp.Negate, rhs);
                 }
 
                 // No positive/negative operator so parse a leaf node
@@ -200,6 +202,37 @@ namespace JA.Parsing
                 var node = Expr.Number(_tokenizer.Current.Number);
                 _tokenizer.MoveNext();
                 return node;
+            }
+            // Bracket?
+            if (_tokenizer.Current.Token == Token.OpenBracket)
+            {
+                // array
+                // Skip '['
+                _tokenizer.MoveNext();
+
+                var elements = new List<Expr>();
+                while (true)
+                {
+                    // Parse argument and add to list
+                    elements.Add(ParseAddSubtract());
+
+                    // Is there another argument?
+                    if (_tokenizer.Current.Token == Token.Comma)
+                    {
+                        _tokenizer.MoveNext();
+                        continue;
+                    }
+
+                    // Get out
+                    break;
+                }
+
+                // Check and skip ')'
+                if (_tokenizer.Current.Token != Token.CloseBracket)
+                    throw new SyntaxException("Missing close bracket");
+                _tokenizer.MoveNext();
+
+                return Expr.FromArray(elements);
             }
 
             // Parenthesis?
@@ -266,9 +299,17 @@ namespace JA.Parsing
                     switch (arguments.Count)
                     {
                         case 1:
-                            return new UnaryFunctionExpr(name, arguments[0]);
+                            if (FindOperation(name, out UnaryOp uop))
+                            {
+                                return Expr.Unary(uop, arguments[0]);
+                            }
+                            throw new ArgumentException($"Invalid unary function {name}");
                         case 2:
-                            return new BinaryFunctionExpr(name, arguments[0], arguments[1]);
+                            if (FindOperation(name, out BinaryOp bop))
+                            {
+                                return Expr.Binary(bop, arguments[0], arguments[1]);
+                            }
+                            throw new ArgumentException($"Invalid binary function {name}");
                         default:
                             throw new SyntaxException("Invalid number of arguments");
                     }
@@ -278,6 +319,48 @@ namespace JA.Parsing
             // Don't Understand
             throw new SyntaxException($"Unexpected token: {_tokenizer.Current.Token}");
         }
+
+        #region Helpers
+        internal static string DescriptionAttr<T>(T source) where T : Enum
+        {
+            string name = source.ToString();
+            var fi = source.GetType().GetField(name);
+            var attribute = fi.GetCustomAttributes<DescriptionAttribute>(false).FirstOrDefault();
+            if (attribute != null)
+            {
+                return attribute.Description;
+            }
+            return name;
+        }
+
+        internal static bool FindOperation(string name, out UnaryOp op)
+        {
+            foreach (var item in Enum.GetValues(typeof(UnaryOp)) as UnaryOp[])
+            {
+                if (DescriptionAttr(item).Equals(name))
+                {
+                    op = item;
+                    return true;
+                }
+            }
+            op = UnaryOp.Undefined;
+            return false;
+        }
+        internal static bool FindOperation(string name, out BinaryOp op)
+        {
+            foreach (var item in Enum.GetValues(typeof(BinaryOp)) as BinaryOp[])
+            {
+                if (DescriptionAttr(item).Equals(name))
+                {
+                    op = item;
+                    return true;
+                }
+            }
+            op = BinaryOp.Undefined;
+            return false;
+        }
+
+        #endregion
 
     }
 

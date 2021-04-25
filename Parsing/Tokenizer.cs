@@ -17,6 +17,8 @@ namespace JA.Parsing
         Power,          // new addition, JA
         OpenParens,
         CloseParens,
+        OpenBracket,
+        CloseBracket,
         Comma,
         Identifier,
         Number,
@@ -115,6 +117,16 @@ namespace JA.Parsing
                 case ',':
                     NextChar();
                     Current = new TokenNode(Token.Comma, Current.Depth);
+                    return true;
+
+                case '[':
+                    NextChar();
+                    Current = new TokenNode(Token.OpenBracket, Current.Depth+1);
+                    return true;
+
+                case ']':
+                    NextChar();
+                    Current = new TokenNode(Token.CloseBracket, Current.Depth-1);
                     return true;
             }
 
