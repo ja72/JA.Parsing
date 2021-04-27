@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1" MembersFormat="NameAndType">
+  <Class Name="JA.Parsing.Tokenizer" BaseTypeListCollapsed="true">
+    <Position X="0.5" Y="0.5" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>ACEAAAAgACAAJBAAAACAAAAAAAAAAAAAIAABgAAAAAA=</HashCode>
+      <FileName>Parsing\Tokenizer.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" Collapsed="true" />
+  </Class>
+  <Class Name="JA.Parsing.Parser">
+    <Position X="0.5" Y="4.75" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAABCAMAAAAAAAAAAiAAIAAAAAABAAAQAAA=</HashCode>
+      <FileName>Parsing\Parser.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="JA.Parsing.Expr">
+    <Position X="3.25" Y="0.5" Width="2.5" />
+    <Compartments>
+      <Compartment Name="Fields" Collapsed="true" />
+      <Compartment Name="Properties" Collapsed="true" />
+    </Compartments>
+    <TypeIdentifier>
+      <HashCode>gQYmHBAAAZQgArjk+GUnAIcBgw+IxMkREWwEAsKgQPI=</HashCode>
+      <FileName>Parsing\Expr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" Collapsed="true" />
+  </Class>
+  <Class Name="JA.Parsing.VariableExpr">
+    <Position X="6.25" Y="0.5" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>QAAAIAAAAAAAQgAEgEAgAAQAAAAAAIAAAAAEAAIACEA=</HashCode>
+      <FileName>Parsing\VariableExpr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" Collapsed="true" />
+  </Class>
+  <Class Name="JA.Parsing.ConstExpr">
+    <Position X="6.25" Y="5.5" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAEgAAgAAQAAgAAAIAAAAAkAAAAAEA=</HashCode>
+      <FileName>Parsing\ConstExpr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" Collapsed="true" />
+  </Class>
+  <Class Name="JA.Parsing.NamedConstantExpr">
+    <Position X="9.25" Y="7.25" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAQAAEgEAABAAAAAAAAIAAAAACAAAACAA=</HashCode>
+      <FileName>Parsing\ConstExpr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" Collapsed="true" />
+  </Class>
+  <Class Name="JA.Parsing.ArrayExpr">
+    <Position X="6.25" Y="9.5" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAEgAAwAAQAAAAAAICAAAAEAAAAAEA=</HashCode>
+      <FileName>Parsing\ArrayExpr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Class Name="JA.Parsing.UnaryExpr">
+    <Position X="9.25" Y="2.25" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgQEggAgAAYAAAAAAIAAIAAEAAAACEA=</HashCode>
+      <FileName>Parsing\UnaryExpr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Class Name="JA.Parsing.BinaryExpr">
+    <Position X="9.25" Y="11" Width="2.25" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgQEggAgAAYAAAAAAIAACACEAAAACEA=</HashCode>
+      <FileName>Parsing\BinaryExpr.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>

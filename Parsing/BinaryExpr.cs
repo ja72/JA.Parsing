@@ -18,26 +18,15 @@ namespace JA.Parsing
         [Description("max")] Max,
         [Description("min")] Min,
         [Description("pow")] Pow,
-        [Description("sign")] Sign,
         [Description("log")] Log,
+        [Description("atan2")] Atan2,
+        [Description("sign")] Sign,
+        [Description("dot")] Dot,
     }
     public sealed class BinaryExpr : 
         Expr,
         IEquatable<BinaryExpr>
     {
-        internal static readonly Dictionary<BinaryOp, Func<double, double, double>> functions = new Dictionary<BinaryOp, Func<double, double, double>>()
-        {
-            [BinaryOp.Add] = (x, y) => x + y,
-            [BinaryOp.Subtract] = (x, y) => x - y,
-            [BinaryOp.Multiply] = (x, y) => x * y,
-            [BinaryOp.Divide] = (x, y) => x / y,
-            [BinaryOp.Min] = (x, y) => Math.Min(x, y),
-            [BinaryOp.Max] = (x, y) => Math.Max(x, y),
-            [BinaryOp.Pow] = (x, y) => Math.Pow(x, y),
-            [BinaryOp.Sign] = MathExtra.Sign,
-            [BinaryOp.Log] = (x,y) => Math.Log(x,y),
-        };
-
         public BinaryExpr(BinaryOp op, Expr left, Expr right)
         {
             if (op==BinaryOp.Undefined)
@@ -46,16 +35,6 @@ namespace JA.Parsing
             }
             this.Op = op;
             this.Key = Parser.DescriptionAttr(op);
-            
-            try
-            {
-                Function = functions[op];
-            }
-            catch(KeyNotFoundException ex)
-            {
-                Debug.WriteLine(ex.ToString());
-                throw new ArgumentException($"Operator {op} not found.", nameof(op));
-            }
             this.Left = left;
             this.Right = right;
         }
@@ -63,7 +42,6 @@ namespace JA.Parsing
         public BinaryOp Op { get; }
         public Expr Left { get; }
         public Expr Right { get; }
-        public Func<double, double, double> Function { get; }
         public override int ResultCount => Math.Max(Left.ResultCount, Right.ResultCount);
 
         protected internal override void AddVariables(List<VariableExpr> variables)
@@ -130,6 +108,8 @@ namespace JA.Parsing
                 case BinaryOp.Max: return ((xp-yp)*Sign(y-x)+xp+yp)/2;
                 case BinaryOp.Sign: return xp*Sign(y/x);
                 case BinaryOp.Log: return xp/(x*Log(y))-yp*Log(x)/(y*Log(y)^2);
+                case BinaryOp.Atan2: return (y*xp-x*yp)/(Sqr(x)+Sqr(y));
+
                 default:
                     throw new NotImplementedException($"Operator {Key} does not have slope defined.");
             }

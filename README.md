@@ -184,6 +184,7 @@ A list of functions already defined are shown below, but there migth be a few mi
 | `Asinh(x)` | `"asinh(x)"` | Arc-Sine hyperbolic function |
 | `Acosh(x)` | `"acosh(x)"` | Arc-Cosine hyperbolic function |
 | `Atanh(x)` | `"atanh(x)"` | Arc-Tangent hyperbolic function |
+| `Sum(x)` | `"sum(x)"` | Sum of vector `x` |
 
 
 
@@ -201,7 +202,7 @@ A list of functions already defined are shown below, but there migth be a few mi
 | `Sign(x,y)` | `"sign(x,y)` | `abs(x)*sign(y)` |
 | `Log(x,y)` | `"log(x,y)"` | Logarith of `x` with base `y` |
 | `Atan2(dy,dx)` | `"atan2(dy,dx)"` | Full quadrant arc tangent function |
-
+| `Dot(x,y)` | `"dot(x,y)"`  | Dot product of vectors `x` and `y`  |
 
 ### A class diagram is added below
 

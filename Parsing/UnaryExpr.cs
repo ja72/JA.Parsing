@@ -23,8 +23,8 @@ namespace JA.Parsing
         [Description("log2")] Log2,
         [Description("log10")] Log10,
         [Description("sqr")] Sqr,
-        [Description("cub")] Cub,
         [Description("sqrt")] Sqrt,
+        [Description("cub")] Cub,
         [Description("cbrt")] Cbrt,
         [Description("floor")] Floor,
         [Description("ceil")] Ceiling,
@@ -41,46 +41,13 @@ namespace JA.Parsing
         [Description("asinh")] Asinh,
         [Description("acosh")] Acosh,
         [Description("atanh")] Atanh,
+        [Description("sum")] Sum,
     }
 
     public sealed class UnaryExpr : 
         Expr,
         IEquatable<UnaryExpr>
     {
-
-        internal static readonly Dictionary<UnaryOp, Func<double, double>> functions = new Dictionary<UnaryOp, Func<double, double>>()
-        {
-            [UnaryOp.Identity]  = (x) => x,
-            [UnaryOp.Negate]    = (x) => -x,
-            [UnaryOp.Inverse]   = (x) =>1/x,
-            [UnaryOp.Pi]        = (x) => Math.PI*x,
-            [UnaryOp.Rnd]       = (x) => rng.NextDouble()*x,
-            [UnaryOp.Abs]       = (x) => Math.Abs(x),
-            [UnaryOp.Sign]      = (x) => Math.Sign(x),
-            [UnaryOp.Exp]       = (x) => Math.Exp(x),
-            [UnaryOp.Log]       = (x) => Math.Log(x),
-            [UnaryOp.Log2]      = (x) => Math.Log(x,2),
-            [UnaryOp.Log10]     = (x) => Math.Log(x, 10),
-            [UnaryOp.Sqr]       = (x) => x * x,
-            [UnaryOp.Cub]       = (x) => x * x * x,
-            [UnaryOp.Sqrt]      = (x) => Math.Sqrt(x),
-            [UnaryOp.Cbrt]      = (x) => Math.Pow(x, 1/3.0),
-            [UnaryOp.Floor]     = (x) => Math.Floor(x),
-            [UnaryOp.Ceiling]   = (x) => Math.Ceiling(x),
-            [UnaryOp.Round]     = (x) => Math.Round(x),
-            [UnaryOp.Sin]       = (x) => Math.Sin(x),
-            [UnaryOp.Cos]       = (x) => Math.Cos(x),
-            [UnaryOp.Tan]       = (x) => Math.Tan(x),
-            [UnaryOp.Sinh]      = (x) => Math.Sinh(x),
-            [UnaryOp.Cosh]      = (x) => Math.Cosh(x),
-            [UnaryOp.Tanh]      = (x) => Math.Tanh(x),
-            [UnaryOp.Asin]      = (x) => Math.Asin(x),
-            [UnaryOp.Acos]      = (x) => Math.Acos(x),
-            [UnaryOp.Atan]      = (x) => Math.Atan(x),
-            [UnaryOp.Asinh]     = MathExtra.Asinh,
-            [UnaryOp.Acosh]     = MathExtra.Acosh,
-            [UnaryOp.Atanh]     = MathExtra.Atanh,
-        };
 
         public UnaryExpr(UnaryOp op, Expr arg)
         {
@@ -90,21 +57,11 @@ namespace JA.Parsing
             }
             this.Op = op;
             this.Key = Parser.DescriptionAttr(op);
-            try
-            {
-                this.Function = functions[op];
-            }
-            catch (KeyNotFoundException ex)
-            {
-                Debug.WriteLine(ex.ToString());
-                throw new ArgumentException($"Operator {Key} not found.", nameof(op));
-            }
             this.Argument = arg;
         }
         public string Key { get; }
         public UnaryOp Op { get; }
         public Expr Argument { get; }
-        public Func<double, double> Function { get; }
         public override int ResultCount => Argument.ResultCount;
 
         protected internal override void AddVariables(List<VariableExpr> variables)
@@ -207,11 +164,11 @@ namespace JA.Parsing
                 case UnaryOp.Floor: return 0;
                 case UnaryOp.Ceiling: return 0;
                 case UnaryOp.Round: return 0;
-                case UnaryOp.Sin: return xp*Cos(x);
-                case UnaryOp.Cos: return -xp*Sin(x);
+                case UnaryOp.Sin: return Cos(x)*xp;
+                case UnaryOp.Cos: return (-Sin(x))*xp;
                 case UnaryOp.Tan: return 2*xp/(1+Cos(2*x));
-                case UnaryOp.Sinh: return xp*Cosh(x);
-                case UnaryOp.Cosh: return xp*Sinh(x);
+                case UnaryOp.Sinh: return Cosh(x)*xp;
+                case UnaryOp.Cosh: return Sinh(x)*xp;
                 case UnaryOp.Tanh: return xp/(0.5*(1+Cosh(2*x)));
                 case UnaryOp.Asin: return xp/Sqrt(1-(x^2));
                 case UnaryOp.Acos: return -xp/Sqrt(1-(x^2));
@@ -219,6 +176,7 @@ namespace JA.Parsing
                 case UnaryOp.Asinh: return xp/Sqrt((x^2)+1);
                 case UnaryOp.Acosh: return xp/Sqrt((x^2)-1);
                 case UnaryOp.Atanh: return xp/(1-(x^2));
+                case UnaryOp.Sum: return Sum(xp);
                 default:
                     throw new NotImplementedException($"Operator {Key} does not have slope defined.");
             }

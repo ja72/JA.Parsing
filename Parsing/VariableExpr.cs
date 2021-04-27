@@ -70,7 +70,7 @@ namespace JA.Parsing
         {
             var parts = Symbol.Split('_');
             parts[0] += dot;
-            return Variable(string.Join(string.Empty, parts));
+            return Variable(string.Join("_", parts));
         }
 
         #region IEquatable Members
