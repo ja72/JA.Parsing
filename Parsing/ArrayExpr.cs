@@ -54,19 +54,7 @@ namespace JA.Parsing
         {
             return new ArrayExpr(Elements.Select((item) => item.Substitute(target, expression)).ToArray());
         }
-
-        internal static bool IsVectorizable(Expr argument, out int count, out Expr[] argArray)
-        {
-            if (argument.IsArray(out argArray))
-            {
-                count = argArray.Length;
-                return true;
-            }
-            count = 1;
-            argArray = null;
-            return false;
-        }
-
+        
         internal static bool IsVectorizable(Expr left, Expr right, out int count, out Expr[] leftArray, out Expr[] rightArray)
         {
             if (left.IsArray(out leftArray) && right.IsArray(out rightArray))

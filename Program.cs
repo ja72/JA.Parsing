@@ -23,11 +23,38 @@ namespace JA
             TestArrayParse1();            
             TestArrayParse2();
             TestCubicSpline();
+            TestMatrix();
 
 #if DEBUG
             Console.WriteLine("Press ENTER to end.");
             Console.ReadLine();
 #endif
+        }
+
+        private static void TestMatrix()
+        {
+            var A = Expr.Parse("[[1,-x],[x,2*x-1]]");
+            Console.WriteLine($"Matrix: {A}");
+            var rows = A.ToArray();
+            var jagged = rows.Select((row)=>row.ToArray()).ToArray();
+            Console.WriteLine("By Rows");
+            foreach (var row in A.ToArray())
+            {
+                foreach (var item in row.ToArray())
+                {
+                    Console.Write($"{item,-7} ");
+                }
+                Console.WriteLine();
+            }
+
+            Console.WriteLine($"tr(A)={Expr.Transpose(A)}");
+            var B = A.Partial("x");
+            Console.WriteLine($"Rate: {B}");
+
+            var input = "tr([[1,2],[3,4]])/4";
+            Console.WriteLine($"Input: F={input}");
+            var F = Expr.Parse(input);
+            Console.WriteLine($"F={F}");
         }
 
         static void TestNamedConstants()
@@ -92,6 +119,7 @@ namespace JA
             {
                 if (op==UnaryOp.Undefined) continue;
                 if (op==UnaryOp.Sum) continue;
+                if (op==UnaryOp.Transpose) continue;
                 var f_expr = Expr.Unary(op, a);
                 var dfda = f_expr.Partial(a);
                 var f = f_expr[a];
@@ -319,9 +347,6 @@ namespace JA
             var d_y = y.Partial("x");
             Console.WriteLine($"dy/dx={d_y}");
             var yp = y.TotalDerivative();
-            //var yp = y.TotalDerivative(
-            //    new VariableExpr[] { "x", "c_0", "c_1", "c_2" },
-            //    new Expr[] { 1, 0, "cp_1", "cp_2" } );
             Console.WriteLine($"yp={yp}");
 
             Console.WriteLine();

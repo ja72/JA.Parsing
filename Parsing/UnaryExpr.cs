@@ -42,6 +42,7 @@ namespace JA.Parsing
         [Description("acosh")] Acosh,
         [Description("atanh")] Atanh,
         [Description("sum")] Sum,
+        [Description("tr")] Transpose,
     }
 
     public sealed class UnaryExpr : 
@@ -71,9 +72,9 @@ namespace JA.Parsing
 
         protected internal override void Compile(ILGenerator generator, Dictionary<VariableExpr, int> envirnoment)
         {
-            if (ArrayExpr.IsVectorizable(Argument, out int count, out Expr[] argArray))
+            if (Argument.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Unary(Op, argArray[i]);
@@ -177,6 +178,7 @@ namespace JA.Parsing
                 case UnaryOp.Acosh: return xp/Sqrt((x^2)-1);
                 case UnaryOp.Atanh: return xp/(1-(x^2));
                 case UnaryOp.Sum: return Sum(xp);
+                case UnaryOp.Transpose: return Transpose(xp);
                 default:
                     throw new NotImplementedException($"Operator {Key} does not have slope defined.");
             }

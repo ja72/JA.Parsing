@@ -45,7 +45,12 @@ namespace JA.Parsing
         public IEnumerator<TokenNode> GetEnumerator() => this;
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 
-        // Read the next character from the input strem
+        public override string ToString()
+        {
+            return $"{_expression} => {Current.Token}";
+        }
+
+        // Read the next character from the input stream
         // and store it in _currentChar, or load '\0' if EOF
         void NextChar()
         {

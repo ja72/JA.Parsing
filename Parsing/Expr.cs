@@ -55,10 +55,18 @@ namespace JA.Parsing
 
         public static Expr Unary(UnaryOp op, Expr argument)
         {
-            if (ArrayExpr.IsVectorizable(argument, out int count, out var argArray))
+            if (argument.IsMatrix(out var matrix))
             {
-                var vector = new Expr[count];
-                for (int i = 0; i < vector.Length; i++)
+                switch (op)
+                {
+                    case UnaryOp.Transpose:
+                        return FromMatrix(Transpose(matrix));
+                }
+            }
+            if(argument.IsArray(out var argArray))
+            {
+                var vector = new Expr[argArray.Length];
+                for (int i = 0; i < argArray.Length; i++)
                 {
                     vector[i] = Unary(op, argArray[i]);
                 }
@@ -175,8 +183,6 @@ namespace JA.Parsing
                 case UnaryOp.Acosh:
                 case UnaryOp.Atanh:
                     return mathExType.GetMethod(op.ToString(), new[] { typeof(double) });
-                //case UnaryOp.Sum:
-                //    return mathExType.GetMethod(op.ToString(), new[] { typeof(double[]) });
                 default:
                     throw new ArgumentException($"Operator {op} not handled.", nameof(op));
             }
@@ -193,11 +199,30 @@ namespace JA.Parsing
                     return mathType.GetMethod(op.ToString(), new[] { typeof(double), typeof(double) });
                 case BinaryOp.Sign:
                     return mathExType.GetMethod(op.ToString(), new[] { typeof(double), typeof(double) });
-                //case BinaryOp.Dot:
-                //    return mathExType.GetMethod(op.ToString(), new[] { typeof(double[]), typeof(double[]) });
                 default:
                     throw new ArgumentException($"Operator {op} not handled.", nameof(op));
             }
+        }
+        public bool IsMatrix(out Expr[][] elements)
+        {
+            if (IsArray(out var rows))
+            {
+                elements = new Expr[rows.Length][];
+                for (int i = 0; i < elements.Length; i++)
+                {
+                    if (rows[i].IsArray(out var items))
+                    {
+                        elements[i] = items;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            elements = null;
+            return false;
         }
         public bool IsArray(out Expr[] elements)
         {
@@ -206,9 +231,9 @@ namespace JA.Parsing
                 elements = ae.Elements;
                 return true;
             }
-            elements = Array.Empty<Expr>();
+            elements = null;
             return false;
-        }
+        }        
         public bool IsConst(out double value)
         {
             if (this is ConstExpr ce)
@@ -540,6 +565,9 @@ namespace JA.Parsing
 
         #region Properties
 
+        /// <summary>
+        /// The element count for array expressions, or 1.
+        /// </summary>
         public abstract int ResultCount { get; }
 
         public Func<double, double> this[string var1]
@@ -778,9 +806,77 @@ namespace JA.Parsing
             throw new ArgumentException($"Expected a symbol and got {symbol}.", nameof(symbol));
         }
         public static Expr FromArray(IEnumerable<Expr> expressions)
-            => new ArrayExpr(expressions.ToArray());
+        {
+            return FromArray(expressions.ToArray());
+        }
+
         public static Expr FromArray(params Expr[] expressions)
-            => new ArrayExpr(expressions);
+        {
+            if (expressions.Length==0)
+            {
+                return 0;
+            }
+            if (expressions.Length==1)
+            {
+                return expressions[0];
+            }
+            return new ArrayExpr(expressions);
+        }
+
+        public static Expr FromMatrix(Expr[][] matrix)             
+        {
+            if (matrix.Length==0)
+            {
+                return 0;
+            }
+            if (matrix.Length==1)
+            {
+                return FromArray(matrix[0]);
+            }
+            return FromArray(matrix.Select((row) => FromArray(row)).ToArray());
+        }
+
+        public Expr[] ToArray()
+        {
+            if (this.IsArray(out var array))
+            {
+                return array;
+            }
+            return new[] { this };
+        }
+
+        public Expr[][] ToMatrix() 
+        {
+            if (IsMatrix(out var matrix))
+            {
+                return matrix;
+            }
+            return new[] { new[] { this } };
+        }
+        public static Expr Transpose(Expr right)
+        {
+            if (right.IsMatrix(out var matrix))
+            {
+                return FromMatrix(Transpose(matrix));
+            }
+            return right;
+        }
+        public static Expr[][] Transpose(Expr[][] matrix)
+        {
+            int n = matrix.Length;
+            int m = n>0 ? matrix[0].Length : 0;
+            var result = new Expr[m][];
+            for (int i = 0; i < result.Length; i++)
+            {
+                var row = new Expr[n];
+                for (int j = 0; j < row.Length; j++)
+                {
+                    row[j] = matrix[j][i];
+                }
+                result[i] = row;
+            }
+            return result;
+        }
 
         public static readonly ConstExpr Zero = Number(0);
         public static readonly ConstExpr One = Number(1);
@@ -800,12 +896,12 @@ namespace JA.Parsing
         public static Expr Identity(Expr right) => right;
         public static Expr Negate(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out var rightArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
-                    vector[i] = Negate(rightArray[i]);
+                    vector[i] = Negate(argArray[i]);
                 }
                 return FromArray(vector);
             }
@@ -1283,9 +1379,9 @@ namespace JA.Parsing
         #region Unary Functions
         public static Expr Random(Expr factor)
         {
-            if (ArrayExpr.IsVectorizable(factor, out int count, out Expr[] argArray))
+            if (factor.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Random(argArray[i]);
@@ -1297,9 +1393,9 @@ namespace JA.Parsing
 
         public static Expr Pi(Expr factor)
         {
-            if (ArrayExpr.IsVectorizable(factor, out int count, out Expr[] argArray))
+            if (factor.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Pi(argArray[i]);
@@ -1315,9 +1411,9 @@ namespace JA.Parsing
 
         public static Expr Abs(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Abs(argArray[i]);
@@ -1338,9 +1434,9 @@ namespace JA.Parsing
 
         public static Expr Sign(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Sign(argArray[i]);
@@ -1372,9 +1468,9 @@ namespace JA.Parsing
 
         public static Expr Exp(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Exp(argArray[i]);
@@ -1395,9 +1491,9 @@ namespace JA.Parsing
 
         public static Expr Log(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Log(argArray[i]);
@@ -1419,9 +1515,9 @@ namespace JA.Parsing
 
         public static Expr Log2(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Log2(argArray[i]);
@@ -1439,9 +1535,9 @@ namespace JA.Parsing
 
         public static Expr Log10(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Log10(argArray[i]);
@@ -1458,9 +1554,9 @@ namespace JA.Parsing
 
         public static Expr Sqr(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Sqr(argArray[i]);
@@ -1476,9 +1572,9 @@ namespace JA.Parsing
 
         public static Expr Cub(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Cub(argArray[i]);
@@ -1494,9 +1590,9 @@ namespace JA.Parsing
 
         public static Expr Sqrt(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Sqrt(argArray[i]);
@@ -1512,9 +1608,9 @@ namespace JA.Parsing
 
         public static Expr Cbrt(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Cbrt(argArray[i]);
@@ -1530,9 +1626,9 @@ namespace JA.Parsing
 
         public static Expr Floor(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Floor(argArray[i]);
@@ -1548,9 +1644,9 @@ namespace JA.Parsing
 
         public static Expr Ceiling(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Ceiling(argArray[i]);
@@ -1566,9 +1662,9 @@ namespace JA.Parsing
 
         public static Expr Round(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Round(argArray[i]);
@@ -1584,9 +1680,9 @@ namespace JA.Parsing
 
         public static Expr Inv(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Inv(argArray[i]);
@@ -1602,9 +1698,9 @@ namespace JA.Parsing
 
         public static Expr Raise(Expr right, double exponent)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Raise(argArray[i], exponent);
@@ -1644,7 +1740,7 @@ namespace JA.Parsing
         }
         public static Expr Sum(Expr array)
         {
-            if (ArrayExpr.IsVectorizable(array, out _, out Expr[] argArray))
+            if (array.IsArray(out var argArray))
             {
                 return Sum(argArray);
             }
@@ -1782,9 +1878,9 @@ namespace JA.Parsing
         #region Trigonometry
         public static Expr Sin(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Sin(argArray[i]);
@@ -1801,9 +1897,9 @@ namespace JA.Parsing
 
         public static Expr Cos(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Cos(argArray[i]);
@@ -1820,9 +1916,9 @@ namespace JA.Parsing
 
         public static Expr Tan(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Tan(argArray[i]);
@@ -1839,9 +1935,9 @@ namespace JA.Parsing
 
         public static Expr Sinh(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Sinh(argArray[i]);
@@ -1858,9 +1954,9 @@ namespace JA.Parsing
 
         public static Expr Cosh(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Cosh(argArray[i]);
@@ -1877,9 +1973,9 @@ namespace JA.Parsing
 
         public static Expr Tanh(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Tanh(argArray[i]);
@@ -1896,9 +1992,9 @@ namespace JA.Parsing
 
         public static Expr Asin(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Asin(argArray[i]);
@@ -1915,9 +2011,9 @@ namespace JA.Parsing
 
         public static Expr Acos(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Acos(argArray[i]);
@@ -1934,9 +2030,9 @@ namespace JA.Parsing
 
         public static Expr Atan(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Atan(argArray[i]);
@@ -1953,9 +2049,9 @@ namespace JA.Parsing
 
         public static Expr Asinh(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Asinh(argArray[i]);
@@ -1972,9 +2068,9 @@ namespace JA.Parsing
 
         public static Expr Acosh(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Acosh(argArray[i]);
@@ -1991,9 +2087,9 @@ namespace JA.Parsing
 
         public static Expr Atanh(Expr right)
         {
-            if (ArrayExpr.IsVectorizable(right, out int count, out Expr[] argArray))
+            if (right.IsArray(out var argArray))
             {
-                var vector = new Expr[count];
+                var vector = new Expr[argArray.Length];
                 for (int i = 0; i < vector.Length; i++)
                 {
                     vector[i] = Atanh(argArray[i]);
