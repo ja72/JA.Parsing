@@ -1,34 +1,64 @@
 # JA.Parsing
 
 An expression parser for `C#` with easy compilation into delegate functions for fast evaluations, some ability for simplifications and automatic differentialtion. Inspired by [https://github.com/toptensoftware/SimpleExpressionEngine](https://github.com/toptensoftware/SimpleExpressionEngine).
+The main class is `Expr` 
 
 ## Code Examples
 
 ```C#
-    VariableExpr x = "x", y="y";
+SymbolExpr x = "x", y="y";
 
-    var f_input = "(x^2-1)/(x^2+1)";
-    Console.WriteLine($"input={f_input}");
-    var f = Expr.Parse(f_input);
-    Console.WriteLine($"f={f}");
-	var fx = f.GetFunction("x");
-    Console.WriteLine($"f(0.5)={fx(0.5)}");
+var f_input = "((x-1)*(x+1))/((x)^2+1)";
+Console.WriteLine($"input: {f_input}");
+var f = Expr.Parse(f_input).GetFunction("f");
+Console.WriteLine(f);
+var fx = f.CompileArg1();
+Console.WriteLine($"f(0.5)={fx(0.5)}");
 
-    var df = f.Partial(x);
-    Console.WriteLine($"df={df}");
+Console.WriteLine("Partial Derivative");
+var df = f.PartialDerivative(x);
+Console.WriteLine($"df/dx: {df}");
 
-    var fp = f.TotalDerivative();
-    Console.WriteLine($"fp={fp}");
+Console.WriteLine("Total Derivative");
+var fp = f.TotalDerivative();
+Console.WriteLine(fp);
 
-    var w_input = "x^2 + 2*x*y + x/y";
-    var w = Expr.Parse(w_input);
-    Console.WriteLine($"w={w}");
-    var wx = w.Partial(x);
-    Console.WriteLine($"wx={wx}");
-    var wy = w.Partial(y);
-    Console.WriteLine($"wy={wy}");
-    var wp = w.Derivative(x, y);
-    Console.WriteLine($"wp={wp}");
+Console.WriteLine();
+var w_input = "x^2 + 2*x*y + x/y";
+Console.WriteLine($"input: {w_input}");
+var w = Expr.Parse(w_input).GetFunction("w", "x", "y");
+Console.WriteLine(w);
+
+Console.WriteLine("Patial Derivatives");
+var wx = w.PartialDerivative(x);
+Console.WriteLine($"dw/dx: {wx}");
+var wy = w.PartialDerivative(y);
+Console.WriteLine($"dw/dy: {wy}");
+
+Console.WriteLine("Total Derivative");
+Console.WriteLine($"Set xp=v, yp=3");
+var wp = w.TotalDerivative("wp", ("x", "v"), ("y", 3.0));
+Console.WriteLine(wp);
+```
+
+The console output of the above code is
+```raw
+input: ((x-1)*(x+1))/((x)^2+1)
+f(x)=(x-1)*(x+1)/(x^2+1)
+f(0.5)=-0.6
+Partial Derivative
+df/dx: f_x(x)=(2*(x^2+1)*x-2*(x-1)*(x+1)*x^1)/(x^2+1)^2
+Total Derivative
+f'(x,xp)=(2*(x^2+1)*x-2*(x-1)*(x+1)*x^1)/(x^2+1)^2*xp
+
+input: x^2 + 2*x*y + x/y
+w(x,y)=x^2+2*x*y+x/y
+Patial Derivatives
+dw/dx: w_x(x,y)=2*x^1+2*y+y/y^2
+dw/dy: w_y(x,y)=2*x-x/y^2
+Total Derivative
+Set xp=v, yp=3
+wp(x,y,v)=(2*x^1+2*y+y/y^2)*v+3*(2*x-x/y^2)
 ```
 
 ## Highlights
@@ -43,7 +73,7 @@ Each expression has a `.Substiute(symbol,expression)`  function that can perform
 
 ## Calculus
 
-Besides standard trig functions such as `Expr.Sin(x)` each `Expr` can evaluate both the partial derivative with respect to a variable with `f.Partial(x)` or the total derivative with `f.TotalDerivative()`.
+Besides standard trig functions such as `Expr.Sin(x)` each `Expr` can evaluate both the partial derivative with respect to a variable with `f.PartialDerivative(x)` or the total derivative with `f.TotalDerivative()`.
 
 The ****total derivative**** needs the derivative of each variable (rate) which is automatically defined by appending the character `p`  to the name of the variable. Then it performs the chain rule, such as
 
@@ -51,10 +81,10 @@ The ****total derivative**** needs the derivative of each variable (rate) which 
 fp = f.Partial(x)*xp + f.Partial(y)*yp + ...
 ```
 
-You can define the names of variable rates by either a list of `varaible-rate` tuples, or 2nd argument with an array of rates. The rates can be just variables names, or can be any expression. For example, if the rate of time is `1` then you can write
+You can define the names of variable rates by either a list of `variable-rate` tuples, or 2nd argument with an array of rates. The rates can be just variables names, or can be any expression. For example, if the rate of time is `1` then you can write
 
 ```
-var q = new VariableExpr[] { "t", "x", "y" }
+var q = new SymbolExpr[] { "t", "x", "y" }
 var qp = new Expr[] { 1, "xp", "yp" }
 fp = f.TotalDerivative(q, qp);
 ```
@@ -98,7 +128,7 @@ As you can see each node in the expression tree only contributes a minimal amoun
 ```cs
 Expr x = "x", y = "y";
 Expr expr = "exp(-(x^2)-(y^2))";
-var f = expr.GetFunction("x","y");
+var f = expr.GetFunction("f", "x","y");
 double z = f(0.2, 0.4); // z = Exp(-0.2)
 
 ```
@@ -162,7 +192,7 @@ A list of functions already defined are shown below, but there migth be a few mi
 | `Abs(x)` | `"abs(x)"` | Absolute value of `x` |
 | `Sign(x)` | `"sign(x)"` | Either `-1` or `+1` depending on sign of `x` |
 | `Exp(x)` | `"exp(x)"` | Exponatiation $e^x$ |
-| `Log(x)` | `"ln(x)"` | Natural Logarithm  $\ln(x)$ |
+| `Ln(x)` | `"ln(x)"` | Natural Logarithm  $\ln(x)$ |
 | `Log2(x)` | `"log2(x)"` | Logarithm Base 2 $\ln(x)/\ln(2)$ |
 | `Log10(x)` | `"log10(x)"` | Logarithm Base 10 $\ln(x)/\ln(10)$ |
 | `Sqr(x)` | `"sqr(x)"` | Square $x^2$, opposite of `"sqrt(x)"` |

@@ -1,484 +1,227 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using JA.Expressions;
 
 namespace JA
 {
-    using System.Diagnostics;
-    using JA.Parsing;
 
     static class Program
     {
+        static int testIndex = 0;
         static void Main(string[] args)
         {
-
-            TestNamedConstants();
-            TestUnaryFunctions();
-            TestBinaryFunctions();
-            TestParse1();
-            TestParse2();
-            TestParse3();
-            TestArrayParse1();            
-            TestArrayParse2();
-            TestCubicSpline();
-            TestMatrix();
-
-#if DEBUG
-            Console.WriteLine("Press ENTER to end.");
-            Console.ReadLine();
-#endif
+            ParseExpressionDemo();
+            CompileExpressionDemo();
+            SimplifyExpressionDemo();
+            //FormattingTest();
+            //MultiVarTest();
+            CalculusExprTest();
+            CalculusDerivativeTest();
+            CalculusAreaTest();
+            CompileArrayDemo();
+            CompileMatrixDemo();
         }
 
-        private static void TestMatrix()
+        private static void CalculusExprTest()
         {
-            var A = Expr.Parse("[[1,-x],[x,2*x-1]]");
-            Console.WriteLine($"Matrix: {A}");
-            var rows = A.ToArray();
-            var jagged = rows.Select((row)=>row.ToArray()).ToArray();
-            Console.WriteLine("By Rows");
-            foreach (var row in A.ToArray())
-            {
-                foreach (var item in row.ToArray())
-                {
-                    Console.Write($"{item,-7} ");
-                }
-                Console.WriteLine();
-            }
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            SymbolExpr x = "x", y="y";
 
-            Console.WriteLine($"tr(A)={Expr.Transpose(A)}");
-            var B = A.Partial("x");
-            Console.WriteLine($"Rate: {B}");
+            var f_input = "((x-1)*(x+1))/((x)^2+1)";
+            Console.WriteLine($"input: {f_input}");
+            var f = Expr.Parse(f_input).GetFunction("f");
+            Console.WriteLine(f);
+            var fx = f.CompileArg1();
+            Console.WriteLine($"f(0.5)={fx(0.5)}");
 
-            var input = "tr([[1,2],[3,4]])/4";
-            Console.WriteLine($"Input: F={input}");
-            var F = Expr.Parse(input);
-            Console.WriteLine($"F={F}");
-        }
+            Console.WriteLine("Partial Derivative");
+            var df = f.PartialDerivative(x);
+            Console.WriteLine($"df/dx: {df}");
 
-        static void TestNamedConstants()
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Named Constants:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            foreach (var (sym, val) in Expr.Constants)
-            {
-                Console.ForegroundColor = ConsoleColor.DarkCyan;
-                Console.Write($"{sym,5}");
-                Console.ForegroundColor = ConsoleColor.Gray;
-                Console.Write($" = ");
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine($"{val}");
-            }
-            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine("Total Derivative");
+            var fp = f.TotalDerivative();
+            Console.WriteLine(fp);
+
             Console.WriteLine();
+            var w_input = "x^2 + 2*x*y + x/y";
+            Console.WriteLine($"input: {w_input}");
+            var w = Expr.Parse(w_input).GetFunction("w", "x", "y");
+            Console.WriteLine(w);
 
-            Console.WriteLine("Test Substitutions:");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Expr expr = "(2*x+1)/(y^2+1)";
-            Console.WriteLine($"f={expr}");
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.Write($"Substitute: x=>10, ");
-            Expr sub = expr.Substitute("x", 10);
-            Console.WriteLine($"f={sub}");
-            Console.ForegroundColor = ConsoleColor.DarkMagenta;
-            Console.Write($"Substitute: x=>z/2, ");
-            sub = expr.Substitute("x", "z/2");
-            Console.WriteLine($"f={sub}");
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.Write($"Substitute: x=>0.5*y-1, ");
-            sub = expr.Substitute("x", "0.5*y-1");
-            Console.WriteLine($"f={sub}");
-            Console.ForegroundColor = ConsoleColor.DarkGreen;
-            Console.Write($"Substitute: y=>sqrt(x), ");
-            sub = expr.Substitute("y", "sqrt(x)");
-            Console.WriteLine($"f={sub}");
-            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine("Patial Derivatives");
+            var wx = w.PartialDerivative(x);
+            Console.WriteLine($"dw/dx: {wx}");
+            var wy = w.PartialDerivative(y);
+            Console.WriteLine($"dw/dy: {wy}");
+
+            Console.WriteLine("Total Derivative");
+            Console.WriteLine($"Set xp=v, yp=3");
+            var wp = w.TotalDerivative("wp", ("x", "v"), ("y", 3.0));
+            Console.WriteLine(wp);
             Console.WriteLine();
         }
 
-        static void TestUnaryFunctions()
+        static void ParseExpressionDemo()
         {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Test Unary Functions:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            VariableExpr a = "a";
-            double x = 2/Math.PI;
-            string fstr = $"f({x})", fpstr = $"f'({x})";
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write($"{"f",-12} ");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"{"f'",-28} ");
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.Write($"{fstr,-22} ");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write($"{fpstr,-28}");
-            Console.WriteLine();
-            foreach (var op in Enum.GetValues(typeof(UnaryOp)) as UnaryOp[])
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine("Evaluate Expression");
+            var text = "1/t^2*(1-exp(-pi*t))/(1-t^2)";
+            var expr = Expr.Parse(text);
+            Console.WriteLine(expr);
+            Console.WriteLine($"Symbols: {string.Join(",", expr.GetSymbols())}");
+            Console.WriteLine($"Rank:{expr.Rank}");
+            Console.WriteLine($"{"t",-12} {"expr",-12}");
+            for (int i = 1; i <= 10; i++)
             {
-                if (op==UnaryOp.Undefined) continue;
-                if (op==UnaryOp.Sum) continue;
-                if (op==UnaryOp.Transpose) continue;
-                var f_expr = Expr.Unary(op, a);
-                var dfda = f_expr.Partial(a);
-                var f = f_expr[a];
-                var fp = dfda[a];
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.Write($"{f_expr,-12} ");
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.Write($"{dfda,-28:g4} ");
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.Write($"{f(x),-22:g4} ");
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{fp(x),-28:g4}");
-                Console.WriteLine();
-            }
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.WriteLine();
-        }
-        static void TestBinaryFunctions()
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Test Binary Functions:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            VariableExpr a = "a", b = "b";
-            double x = 5, y = 2;
-            string fstr = $"f({x},{y})", fpstr = $"f'({x},{y})";
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write($"{"f",-12} ");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"{"f'",-28} ");
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.Write($"{fstr,-22} ");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write($"{fpstr,-28}");
-            Console.WriteLine();
-            foreach (var op in Enum.GetValues(typeof(BinaryOp)) as BinaryOp[])
-            {
-                if (op==BinaryOp.Undefined) continue;
-                var f_expr = Expr.Binary(op, a, b);
-                var dfda = f_expr.Partial(a);
-                var f = f_expr[a, b];
-                var fp = dfda[a, b];
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.Write($"{f_expr,-12} ");
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.Write($"{dfda,-28:g4} ");
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.Write($"{f(x,y),-22:g4} ");
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{fp(x,y),-28:g4}");
-                Console.WriteLine();
-            }
-            Console.WriteLine();
-        }
-
-        static void TestParse1()
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Test Parsing Strings");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var pi = Expr.Const("pi");
-            Console.WriteLine($"π={pi.Value}");
-
-            var s_input = "x+y+z";
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"Input: {s_input}");
-            var s_expr = Expr.Parse(s_input);
-            Console.WriteLine($"Expr: {s_expr}");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.WriteLine($"vars={string.Join(",", s_expr.GetVariables().AsEnumerable())}");
-            
-            var f_input = "2.5*(1-exp(-π*t))";
-            Console.WriteLine($"Input: {f_input}");
-            var f_expr = Expr.Parse(f_input);
-            var f_fun = f_expr.GetFunction("t");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"x={f_expr}");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"{"t",-12} {"x",-12}");
-            for (int i = 0; i < 10; i++)
-            {
-                var t = 0.125 * i-0.5;
-                var x = f_fun(t);
+                var t = 0.10 * i;
+                var x = expr.Eval(("t", t));
                 Console.WriteLine($"{t,-12:g4} {x,-12:g4}");
             }
-            Console.ForegroundColor = ConsoleColor.Gray;
             Console.WriteLine();
         }
-
-        static void TestParse2()
+        static void CompileExpressionDemo()
         {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Test Multivariate Calculus:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            VariableExpr x = "x", y="y";
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            var w_input = "x^2 + 2*x*y + x/y";
-            Console.WriteLine($"Input: {w_input}");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var w = Expr.Parse(w_input);
-            Console.WriteLine($"w={w}");
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.WriteLine($"vars={string.Join(",", w.GetVariables().AsEnumerable())}");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var wx = w.Partial(x);
-            Console.WriteLine($"wx={wx}");
-            var wy = w.Partial(y);
-            Console.WriteLine($"wy={wy}");
-            var wp = w.TotalDerivative(x, y);
-            Console.WriteLine($"wp={wp}");
-
-            var f_input = "(x^2-pi)/(x^2+pi)";
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"Input: {f_input}");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var f = Expr.Parse(f_input);
-            Console.WriteLine($"f={f}");
-            var fx = f["x"];
-            Console.WriteLine($"f(0.5)={fx(0.5)}");
-            Console.ForegroundColor = ConsoleColor.DarkGreen;
-            var df = f.Partial(x);
-            Console.WriteLine($"df={df}");
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            var fp = f.TotalDerivative();
-            Console.WriteLine($"fp={fp}");
-            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine("Compile Expression");
+            var text = "1/t^2*(1-exp(-pi*t))/(1-t^2)";
+            var expr = Expr.Parse(text);
+            var fun = new Function("f", expr, "t");
+            Console.WriteLine(fun);
+            Console.WriteLine($"Rank:{fun.Rank}");
+            var fq = fun.Compile<FArg1>();
+            Console.WriteLine($"{"t",-12} {"f(t)",-12}");
+            for (int i = 1; i <= 10; i++)
+            {
+                var t = 0.10 * i;
+                var x = fq(t);
+                Console.WriteLine($"{t,-12:g4} {x,-12:g4}");
+            }
             Console.WriteLine();
         }
-        static void TestParse3()
+        static void SimplifyExpressionDemo()
         {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Test Kinematics:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            VariableExpr q = "q", r = "r";
-            VariableExpr qp = q.Rate(), rp = r.Rate();
-            VariableExpr qpp = qp.Rate(), rpp = rp.Rate();
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            SymbolExpr x = "x", y = "y";
+            double a = 3, b = 0.25;
 
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine($"Variables: {string.Join(", ", q, r)}");
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.WriteLine($"Rates: {string.Join(", ", qp, rp)}");
-            Console.ForegroundColor = ConsoleColor.DarkGreen;
-            Console.WriteLine($"Accelerations: {string.Join(", ", qpp, rpp)}");
-
-            Expr pos = Expr.FromArray(r*Expr.Sin(q), -r*Expr.Cos(q));
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"pos = {pos}");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Expr vel = pos.TotalDerivative();
-            Console.WriteLine($"vel = {vel}");
-            Console.ForegroundColor = ConsoleColor.Blue;
-            Expr J = vel.Jacobian(rp,qp);
-            Console.WriteLine($"jacobian = {J}");
-
-            Console.ForegroundColor = ConsoleColor.Green;
-            Expr acc = vel.TotalDerivative();
-            Console.WriteLine($"acc = {acc}");
+            Console.WriteLine($"a={a}, b={b}, {x}, {y}");
 
             Console.WriteLine();
+            int index = 0;
+            Console.WriteLine($"{index,3}.     definition = result");
+            Console.WriteLine($"{++index,3}. ({a}+x)+({b}+y) = {(a+x)+(b+y)}");
+            Console.WriteLine($"{++index,3}. ({a}+x)-({b}+y) = {(a+x)-(b+y)}");
+            Console.WriteLine($"{++index,3}. ({a}-x)+({b}+y) = {(a-x)+(b+y)}");
+            Console.WriteLine($"{++index,3}. ({a}+x)-({b}-y) = {(a+x)-(b-y)}");
+            Console.WriteLine($"{++index,3}. ({a}-x)+({b}-y) = {(a-x)+(b-y)}");
+            Console.WriteLine($"{++index,3}. ({a}-x)-({b}-y) = {(a-x)-(b-y)}");
+            Console.WriteLine($"{++index,3}. ({a}*x)+({b}*y) = {(a*x)+(b*y)}");
+            Console.WriteLine($"{++index,3}. ({a}*x)-({b}*y) = {(a*x)-(b*y)}");
+            Console.WriteLine($"{++index,3}. ({a}/x)+({b}*y) = {(a/x)+(b*y)}");
+            Console.WriteLine($"{++index,3}. ({a}*x)-({b}/y) = {(a*x)-(b/y)}");
+            Console.WriteLine($"{++index,3}. ({a}/x)+({b}/y) = {(a/x)+(b/y)}");
+            Console.WriteLine($"{++index,3}. ({a}/x)-({b}/y) = {(a/x)-(b/y)}");
+                                        
+            Console.WriteLine($"{++index,3}. ({a}+x)*({b}+y) = {(a+x)*(b+y)}");
+            Console.WriteLine($"{++index,3}. ({a}+x)/({b}+y) = {(a+x)/(b+y)}");
+            Console.WriteLine($"{++index,3}. ({a}-x)*({b}+y) = {(a-x)*(b+y)}");
+            Console.WriteLine($"{++index,3}. ({a}+x)/({b}-y) = {(a+x)/(b-y)}");
+            Console.WriteLine($"{++index,3}. ({a}-x)*({b}-y) = {(a-x)*(b-y)}");
+            Console.WriteLine($"{++index,3}. ({a}-x)/({b}-y) = {(a-x)/(b-y)}");
+            Console.WriteLine($"{++index,3}. ({a}*x)*({b}*y) = {(a*x)*(b*y)}");
+            Console.WriteLine($"{++index,3}. ({a}*x)/({b}*y) = {(a*x)/(b*y)}");
+            Console.WriteLine($"{++index,3}. ({a}/x)*({b}*y) = {(a/x)*(b*y)}");
+            Console.WriteLine($"{++index,3}. ({a}*x)/({b}/y) = {(a*x)/(b/y)}");
+            Console.WriteLine($"{++index,3}. ({a}/x)*({b}/y) = {(a/x)*(b/y)}");
+            Console.WriteLine($"{++index,3}. ({a}/x)/({b}/y) = {(a/x)/(b/y)}");
+            Console.WriteLine();
         }
-        static void TestArrayParse1()
+        static void CompileArrayDemo()
         {
-            const int colWidth = 12;
-
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Vectorizing Array Parsing:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var input = @"[x^3,6*x^2*(1-x),6*x*(1-x)^2,(1-x)^3]/6";
-            Console.WriteLine($"Input: {input}");
-            var expr = Expr.Parse(input);
-            Console.WriteLine($"y={expr}");
-            var f_expr = expr.GetArray("x");
-            var d_expr = expr.TotalDerivative();
-            Console.WriteLine($"dy={expr}");
-            var sum_expr = Expr.Sum(expr);
-            var f_sum = sum_expr.GetFunction("x");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"Σy={sum_expr}");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var d_sum_expr = sum_expr.Partial("x");
-            var df_sum = d_sum_expr.GetFunction("x");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"dΣy={d_sum_expr}");
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.Write($"{"x",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            for (int j = 0; j < expr.ResultCount; j++)
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine("Array Expression");
+            var text = "abs([(1-t)^3,3*(1-t)^2*t,3*t^2*(1-t),t^3])";
+            var expr = Expr.Parse(text);
+            var y = expr.Eval(("t", 0.5));
+            var fun = new Function("f", expr, "t");
+            Console.WriteLine(fun);
+            var f = fun.Compile<QArg1>();
+            Console.WriteLine($"{"t",-12} {"f(t)",-12}");
+            for (int i = 0; i <= 10; i++)
             {
-                var str = $"y[{j}]";
-                Console.Write($"{str,-colWidth} ");
+                var t = 0.10 * i;
+                var x = f(t);
+                Console.WriteLine($"{t,-12:g4} {x,-18:g4}");
             }
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"{"Σy",-colWidth} ");
-            Console.Write($"{"dΣy/dx",-colWidth} ");
-            Console.WriteLine();
-            const int n = 12;
-            for (int i = 0; i <= n; i++)
-            {
-                Console.ForegroundColor = ConsoleColor.Gray;
-                double x_i = (double)i/n;
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.Write($"{x_i,-colWidth:g4} ");
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                double[] y_i = f_expr(x_i);
-                for (int j = 0; j < y_i.Length; j++)
-                {
-                    Console.Write($"{y_i[j],-colWidth:g4} ");
-                }
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                double Sy = f_sum(x_i), dSy = df_sum(x_i);
-                Console.Write($"{Sy,-colWidth:g4} ");
-                Console.Write($"{dSy,-colWidth:g4} ");
-                Console.WriteLine();
-            }
-            Console.ForegroundColor = ConsoleColor.Gray;
-
-            Console.WriteLine("Dot Product:");
-
-            var ex1 = Expr.FromArray(1, Expr.Sin("x"), Expr.Cos("x"));
-            var ex2 = Expr.FromArray("c_0", "c_1", "c_2");
-            Console.WriteLine($"ex1={ex1}");
-            Console.WriteLine($"ex2={ex2}");
-            var y = Expr.Dot(ex1, ex2);
-
-            Console.WriteLine($"Dot(ex1,ex2)={y}");
-            var d_y = y.Partial("x");
-            Console.WriteLine($"dy/dx={d_y}");
-            var yp = y.TotalDerivative();
-            Console.WriteLine($"yp={yp}");
-
             Console.WriteLine();
         }
-        static void TestArrayParse2()
+
+        static void CompileMatrixDemo()
         {
-            const int colWidth = 12;
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine("Matrix Expression");
+            var tt = Expr.Variable("t");
+            var expr = Expr.Matrix( new Expr[][] {
+                new Expr[] { 1/(1+tt^2), 1-(tt^2)/(1+tt^2) },
+                new Expr[] { tt/(1+tt^2), -1/(1+tt^2) }});
 
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Mismatch Array Parsing:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var input = @"[x, 1-x] + [1,2,3]";
-            Console.WriteLine($"Input: {input}");
-            var expr = Expr.Parse(input);
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"y={expr}");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            var f_expr = expr.GetArray("x");
-            var sum_expr = Expr.Sum(expr);
-            var f_sum = sum_expr.GetFunction("x");
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.WriteLine($"Σy={sum_expr}");
-            var d_sum_expr = sum_expr.Partial("x");
-            var df_sum = d_sum_expr.GetFunction("x");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"dΣy={d_sum_expr}");
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.Write($"{"x",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.DarkMagenta;
-            for (int j = 0; j < expr.ResultCount; j++)
+            var y = expr.Eval((tt, 0.5));
+
+            var fun = new Function("f", expr, "t");
+            Console.WriteLine(fun);
+            var f = fun.Compile<QArg1>();
+            Console.WriteLine($"{"t",-12} {"f(t)",-12}");
+            for (int i = 0; i <= 10; i++)
             {
-                var str = $"y[{j}]";
-                Console.Write($"{str,-colWidth} ");
+                var t = 0.10 * i;
+                var x = f(t);
+                Console.WriteLine($"{t,-12:g4} {x,-26:g4}");
             }
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"{"Σy",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write($"{"dΣy/dx",-colWidth} ");
-            Console.WriteLine();
-            const int n = 4;
-            for (int i = 0; i <= n; i++)
-            {
-                double x = (double)i/n;
-                Console.ForegroundColor = ConsoleColor.Gray;
-                Console.Write($"{x,-colWidth:g4} ");
-                double[] y = f_expr(x);
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                for (int j = 0; j < y.Length; j++)
-                {
-                    Console.Write($"{y[j],-colWidth:g4} ");
-                }
-                double Sy = f_sum(x), dSy = df_sum(x);
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.Write($"{Sy,-colWidth:g4} ");
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{dSy,-colWidth:g4} ");
-                Console.WriteLine();
-            }
+
+            var fp = fun.PartialDerivative(tt);
+            Console.WriteLine(fp);
             Console.WriteLine();
         }
-
-        static void TestCubicSpline()
+        static void CalculusDerivativeTest()
         {
-            const int colWidth = 12;
-
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Cubic Spline:");
-            Console.ForegroundColor = ConsoleColor.Gray;
-            VariableExpr a = "a";
-
-            var xi = new double[] {0, 2};
-            var yi = new double[] {1, 7};
-            var ypi = new double[] {0, 0};
-            var h = xi[1]-xi[0];
-
-            Console.WriteLine("Given Boundary Conditions:");
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.Write($"{"x",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.Write($"{"y",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.DarkGreen;
-            Console.Write($"{"yp",-colWidth} ");
-            Console.WriteLine();
-            for (int i = 0; i < xi.Length; i++)
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            SymbolExpr x = "x";
+            foreach (var op in KnownUnaryDictionary.Defined)
             {
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.Write($"{xi[i],-colWidth:g4} ");
-                Console.ForegroundColor = ConsoleColor.DarkCyan;
-                Console.Write($"{yi[i],-colWidth:g4} ");
-                Console.ForegroundColor = ConsoleColor.DarkGreen;
-                Console.Write($"{ypi[i],-colWidth:g4} ");
-                Console.WriteLine();
+                var f = Expr.Unary(op, x);
+                var fp = f.PartialDerivative(x);
+                Console.WriteLine($"d/dx({f}) = {fp}");
             }
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.WriteLine("Calculated Interpolation:");
-            Expr ξ = a/h;
-            var basis = Expr.FromArray(
-                ((1-ξ)^2)*(2*ξ+1),
-                (ξ^2)*(3-2*ξ),
-                h*ξ*((1-ξ)^2),
-                h*(ξ^2)*(ξ-1));
-            var coef = new Expr[] { yi[0], yi[1], ypi[0], ypi[1] };
-
-            Expr y_expr = Expr.Dot(basis, coef);
-            Console.WriteLine($"y={y_expr}");
-            var y_fun = y_expr["a"];
-            Expr dy_expr = y_expr.Partial("a");
-            Console.WriteLine($"yp={dy_expr}");
-            var dy_fun = dy_expr["a"];
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write($"{"x",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"{"y",-colWidth} ");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write($"{"yp",-colWidth} ");
             Console.WriteLine();
-            for (int i = 0; i < 12; i++)
-            {
-                double t = (double)i/11;
-                double x = (1-t)*xi[0] + t*xi[1];
-                double y = y_fun(x);
-                double yp = dy_fun(x);
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.Write($"{x,-colWidth:g4} ");
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.Write($"{y,-colWidth:g4} ");
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{yp,-colWidth:g4} ");
-                Console.WriteLine();
-            }
-            Console.ForegroundColor = ConsoleColor.Gray;
+        }
+        static void CalculusAreaTest()
+        {
+            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            // Parametrize a 2D region and calculate it's Area
+
+            // Consider a triange between the origin, and two points
+            //  A = [5,0]
+            //  B = [2,3]
+            Expr t = "t";
+            Expr u = "u";
+            Vector A = new Vector(5,0);
+            Vector B = new Vector(2,3);
+            Expr pos = t*((1-u)*A + u*B );
+            Console.WriteLine($"pos(t,u) = {pos}");
+            Expr dA = Expr.Cross( pos.PartialDerivative(t).ToArray(), pos.PartialDerivative(u).ToArray() );
+            Console.WriteLine($"dA=({dA}) dt du");
+            Expr J = dA.Jacobian();
+            Console.WriteLine($"J={J}");
+            Console.WriteLine();
         }
 
+        static string GetMethodName([CallerMemberName] string name = null) 
+        {
+            return name;
+        }
     }
 }
