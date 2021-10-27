@@ -12,6 +12,7 @@ namespace JA.Expressions.Parsing
     public enum Token
     {
         EOF,
+        [Op("=")] Assign,
         [Op("+")] Add,
         [Op("-")] Subtract,
         [Op("*")] Multiply,
@@ -84,42 +85,38 @@ namespace JA.Expressions.Parsing
                     }
                     Current = new TokenNode(Token.EOF);
                     return false;
-
+                case '=':
+                    NextChar();
+                    Current = new TokenNode(Token.Assign, Current.Depth);
+                    return true;
                 case '+':
                     NextChar();
                     Current = new TokenNode(Token.Add, Current.Depth);
                     return true;
-
                 case '-':
                     NextChar();
                     Current = new TokenNode(Token.Subtract, Current.Depth);
                     return true;
-
                 case '*':
                     NextChar();
                     Current = new TokenNode(Token.Multiply, Current.Depth);
                     return true;
-
                 case '/':
                     NextChar();
                     Current = new TokenNode(Token.Divide, Current.Depth);
                     return true;
-
                 case '^':
                     NextChar();
                     Current = new TokenNode(Token.Caret, Current.Depth);
                     return true;
-
                 case '(':
                     NextChar();
                     Current = new TokenNode(Token.OpenParens, Current.Depth + 1);
                     return true;
-
                 case ')':
                     NextChar();
                     Current = new TokenNode(Token.CloseParens, Current.Depth - 1);
                     return true;
-
                 case ',':
                     NextChar();
                     Current = new TokenNode(Token.Comma, Current.Depth);
@@ -128,7 +125,6 @@ namespace JA.Expressions.Parsing
                     NextChar();
                     Current = new TokenNode(Token.OpenBracket, Current.Depth+1);
                     return true;
-
                 case ']':
                     NextChar();
                     Current = new TokenNode(Token.CloseBracket, Current.Depth-1);
@@ -218,7 +214,7 @@ namespace JA.Expressions.Parsing
             Depth = depth;
         }
         public static readonly TokenNode Empty = new(Token.EOF);
-        
+
         public static TokenNode operator +(TokenNode node, int level)
             => new(node, node.Depth + level);
         public static TokenNode operator -(TokenNode node, int level)

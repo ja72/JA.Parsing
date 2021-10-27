@@ -69,69 +69,6 @@ namespace JA.Expressions
         {
             return new ArrayExpr(Elements.Select((item) => item.Substitute(variable, value)).ToArray());
         }
-        internal static bool IsVectorizable(ref Expr[] leftArray, ref Expr[] rightArray, out int count)
-        {
-            int lcount = leftArray.Length;
-            int rcount = rightArray.Length;
-            if (lcount < rcount)
-            {
-                var temp = new Expr[rcount];
-                int index = 0;
-                while (index<temp.Length)
-                {
-                    System.Array.Copy(leftArray, 0, temp, index, Math.Min(lcount, temp.Length-index));
-                    index += lcount;
-                }
-                leftArray = temp;
-                lcount = temp.Length;
-            }
-            if (lcount > rcount)
-            {
-                var temp = new Expr[lcount];
-                var index = 0;
-                while (index<temp.Length)
-                {
-                    System.Array.Copy(rightArray, 0, temp, index, Math.Min(rcount, temp.Length-index));
-                    index += rcount;
-                }
-                rightArray = temp;
-                rcount = temp.Length;
-            }
-            count = Math.Max(lcount, rcount);
-            return true;
-        }
-        internal static bool IsVectorizable(Expr left, Expr right, out int count, out Expr[] leftArray, out Expr[] rightArray)
-        {
-            if (left.IsArray(out leftArray) && right.IsArray(out rightArray))
-            {
-                return IsVectorizable(ref leftArray, ref rightArray, out count);
-            }
-            else if (left.IsArray(out leftArray))
-            {
-                rightArray = new Expr[leftArray.Length];
-                for (int i = 0; i < rightArray.Length; i++)
-                {
-                    rightArray[i] = right;
-                }
-                //return IsVectorizable(leftArray, rightArray, out count, out leftArray, out rightArray);
-                return IsVectorizable(ref leftArray, ref rightArray, out count);
-            }
-            else if (right.IsArray(out rightArray))
-            {
-                leftArray = new Expr[rightArray.Length];
-                for (int i = 0; i < leftArray.Length; i++)
-                {
-                    leftArray[i] = left;
-                }
-                //return IsVectorizable(leftArray, rightArray, out count, out leftArray, out rightArray);
-                return IsVectorizable(ref leftArray, ref rightArray, out count);
-            }
-            // both scalar
-            count = 1;
-            leftArray = null;
-            rightArray = null;
-            return false;
-        }
 
         public override Expr PartialDerivative(SymbolExpr symbol)
         {

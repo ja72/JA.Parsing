@@ -17,18 +17,20 @@ namespace JA
             ParseExpressionDemo();
             CompileExpressionDemo();
             SimplifyExpressionDemo();
+            AssignExpressionDemo();
             //FormattingTest();
             //MultiVarTest();
-            CalculusExprTest();
-            CalculusDerivativeTest();
-            CalculusAreaTest();
+            CalculusExprDemo();
+            CalculusDerivativeDemo();
+            CalculusSolveDemo();
             CompileArrayDemo();
             CompileMatrixDemo();
         }
 
-        private static void CalculusExprTest()
+
+        private static void CalculusExprDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             SymbolExpr x = "x", y="y";
 
             var f_input = "((x-1)*(x+1))/((x)^2+1)";
@@ -67,7 +69,7 @@ namespace JA
 
         static void ParseExpressionDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             Console.WriteLine("Evaluate Expression");
             var text = "1/t^2*(1-exp(-pi*t))/(1-t^2)";
             var expr = Expr.Parse(text);
@@ -85,7 +87,7 @@ namespace JA
         }
         static void CompileExpressionDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             Console.WriteLine("Compile Expression");
             var text = "1/t^2*(1-exp(-pi*t))/(1-t^2)";
             var expr = Expr.Parse(text);
@@ -104,11 +106,12 @@ namespace JA
         }
         static void SimplifyExpressionDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             SymbolExpr x = "x", y = "y";
-            double a = 3, b = 0.25;
+            //double a = 3, b = 0.25;
+            Expr a = "a=3", b = "b=0.25";
 
-            Console.WriteLine($"a={a}, b={b}, {x}, {y}");
+            Console.WriteLine($"{a}={(double)a}, {b}={(double)b}, {x}, {y}");
 
             Console.WriteLine();
             int index = 0;
@@ -142,7 +145,7 @@ namespace JA
         }
         static void CompileArrayDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             Console.WriteLine("Array Expression");
             var text = "abs([(1-t)^3,3*(1-t)^2*t,3*t^2*(1-t),t^3])";
             var expr = Expr.Parse(text);
@@ -162,7 +165,7 @@ namespace JA
 
         static void CompileMatrixDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             Console.WriteLine("Matrix Expression");
             var tt = Expr.Variable("t");
             var expr = Expr.Matrix( new Expr[][] {
@@ -186,9 +189,9 @@ namespace JA
             Console.WriteLine(fp);
             Console.WriteLine();
         }
-        static void CalculusDerivativeTest()
+        static void CalculusDerivativeDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             SymbolExpr x = "x";
             foreach (var op in KnownUnaryDictionary.Defined)
             {
@@ -198,24 +201,60 @@ namespace JA
             }
             Console.WriteLine();
         }
-        static void CalculusAreaTest()
+        static void CalculusSolveDemo()
         {
-            Console.WriteLine($"*** TEST [{++testIndex}] : {GetMethodName()} ***");
-            // Parametrize a 2D region and calculate it's Area
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
 
-            // Consider a triange between the origin, and two points
-            //  A = [5,0]
-            //  B = [2,3]
-            Expr t = "t";
-            Expr u = "u";
-            Vector A = new Vector(5,0);
-            Vector B = new Vector(2,3);
-            Expr pos = t*((1-u)*A + u*B );
-            Console.WriteLine($"pos(t,u) = {pos}");
-            Expr dA = Expr.Cross( pos.PartialDerivative(t).ToArray(), pos.PartialDerivative(u).ToArray() );
-            Console.WriteLine($"dA=({dA}) dt du");
-            Expr J = dA.Jacobian();
-            Console.WriteLine($"J={J}");
+            Console.WriteLine("Define a function and solve using Newton-Raphon.");
+
+            Expr a = 7, b= 3;
+            Expr x = "x";
+
+            Function f = ( a*Expr.Sin(x)-b*x ).GetFunction("f");
+            Console.WriteLine(f);
+
+            Console.WriteLine("Find solution, such that f(x)=0");
+
+            Scalar init = 3.0;
+            Console.WriteLine($"Initial guess, x={init}");
+            Scalar sol = (Scalar)f.NewtonRaphson(init, 0.0);
+
+            var fx = f.CompileArg1();
+            Console.WriteLine($"x={sol}, f(x)={fx(sol)}");
+
+            Console.WriteLine();
+        }
+
+        static void AssignExpressionDemo()
+        {
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
+            
+            Expr.ClearVariables();
+
+            var input = "a+b = (2*a+2*b)/2";
+            var ex_1 = Expr.Parse(input);
+            Console.WriteLine(ex_1);
+            var e_1 = ex_1.Eval(("a",1), ("b",3) );
+            Console.WriteLine($"Eval = {e_1}");
+
+            Console.WriteLine("Use = for assignment of constants.");
+
+            SymbolExpr a = "a", b= "b", c="c";
+            Expr lhs = Expr.Array(a,b,c);
+            Expr rhs = "[1,2,3]";
+            Console.WriteLine($"{lhs}={rhs}");
+            Expr ex_2 = Expr.Assign(lhs, rhs);
+            Console.WriteLine(ex_2);
+
+            input = "(a+b)*x-c";
+            var f = Expr.Parse(input).GetFunction("f", "x");
+            Console.WriteLine(f);
+            var fx = f.CompileArg1();
+            foreach (var x in new[] { -1.0, 0.0, 1.0 })
+            {
+                Console.WriteLine($"f({x})={fx(x)}");
+            }
+
             Console.WriteLine();
         }
 

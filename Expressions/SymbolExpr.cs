@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Reflection.Emit;
+using System.Collections.ObjectModel;
 
 namespace JA.Expressions
 {
@@ -10,10 +12,14 @@ namespace JA.Expressions
         public static implicit operator string(SymbolExpr symbol) => symbol.Name;
         public override int Rank => 0;
         protected internal override Expr Substitute(Expr variable, Expr value)
-        {
-            if (variable.IsSymbol(out string sym) && sym==Name)
+        {            
+            if (!Variables.ContainsKey(Name))
             {
-                return value;
+                // NOTE: will not substitute a named constant
+                if (variable.IsSymbol(out string sym) && sym==Name)
+                {
+                    return value;
+                }
             }
             return this;
         }
@@ -24,26 +30,37 @@ namespace JA.Expressions
         /// </summary>
         /// <example>
         /// <list type="bullet">
-        /// <item><code>"x".Dot() = "xp"</code></item>
-        /// <item><code>"xh".Dot() = "xhp"</code></item>
-        /// <item><code>"xp".Dot() = "xpp"</code></item>
-        /// <item><code>"x_1".Dot() = "xp_1"</code></item>
-        /// <item><code>"xh_C".Dot() = "xhp_C"</code></item>
+        /// <item><code>"x".Derivative() = "xp"</code></item>
+        /// <item><code>"xh".Derivative() = "xhp"</code></item>
+        /// <item><code>"xp".Derivative() = "xpp"</code></item>
+        /// <item><code>"x_1".Derivative() = "xp_1"</code></item>
+        /// <item><code>"xh_C".Derivative() = "xhp_C"</code></item>
         /// </list>
         /// </example>
         /// <returns>A symbol expression</returns>
-        public SymbolExpr Dot()
+        public Expr Derivative()
         {
+            if (IsConstant(out _))
+            {
+                return 0;
+            }
             var parts = Name.Split('_');
             parts[0] += 'p';
             return string.Join("_", parts);
         }
         protected internal override void FillSymbols(ref List<string> variables)
         {
-            variables.Add(Name);
+            if(!IsConstant(out _))
+            {
+                variables.Add(Name);
+            }
         }
         protected internal override void FillValues(ref List<double> values)
-        {            
+        {
+            if (IsConstant(out var value))
+            {
+                values.Add(value);
+            }
         }
         public override Expr PartialDerivative(SymbolExpr param) => param.Name == Name ? 1 : 0;
         public override IQuantity Eval(params (string sym, double val)[] parameters)
@@ -55,11 +72,11 @@ namespace JA.Expressions
                     return (Scalar)val;
                 }
             }
-            if (Variables.ContainsKey(Name))
+            if (IsConstant(out var value))
             {
-                return (Scalar)Variables[Name];
+                return (Scalar)value;
             }
-            return Scalar.Zero;
+            throw new ArgumentException($"Missing parameter {Name}", nameof(parameters));
         }
         protected internal override void Compile(ILGenerator gen, Dictionary<string, int> env)
         {
@@ -67,13 +84,13 @@ namespace JA.Expressions
             {
                 gen.Emit(OpCodes.Ldarg, env[Name]);
             }
-            else if (Variables.ContainsKey(Name))
+            else if (IsConstant(out var value))
             {
-                gen.Emit(OpCodes.Ldc_R8, Variables[Name]);
+                gen.Emit(OpCodes.Ldc_R8, value);
             }
             else
             {
-                throw new ArgumentException($"Unspecified symbol {Name}", nameof(env));
+                throw new ArgumentException($"Missing parameter {Name}", nameof(env));
             }
         }
         public override string ToString() => ToString("g");

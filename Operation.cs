@@ -104,7 +104,7 @@ namespace JA
         {
             return item.Identifier;
         }
-        public static readonly KnownConstDictionary Defined = GetDefined();
+        public static readonly KnownConstDictionary Defined =  GetDefined();
         static KnownConstDictionary GetDefined()
         {
             var dic = new KnownConstDictionary();
@@ -123,6 +123,15 @@ namespace JA
             }
             return dic;
         }
+
+        public bool ContainsKey(string key)
+        {
+            return base.Contains(key);
+        }
+        
+        public IEnumerable<string> Keys { get => Items.Select((op)=>op.Identifier); }
+        public IEnumerable<ConstOp> Values { get => Items; }
+        public ConstOp[] ToArray() => Values.ToArray();
     }
 
     public class KnownUnaryDictionary : KeyedCollection<string, UnaryOp>
@@ -156,6 +165,14 @@ namespace JA
             }
             return dic;
         }
+        public bool ContainsKey(string key)
+        {
+            return base.Contains(key);
+        }
+
+        public IEnumerable<string> Keys { get => Items.Select((op) => op.Identifier); }
+        public IEnumerable<UnaryOp> Values { get => Items; }
+
     }
     public class KnownBinaryDictionary : KeyedCollection<string, BinaryOp>
     {

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace JA.Expressions
 {
+using System.Collections.ObjectModel;
     using System.Diagnostics;
     using System.Xml.Linq;
     using JA.Expressions.Parsing;
@@ -14,7 +15,9 @@ namespace JA.Expressions
     public abstract record Expr : IExpression<Expr>
     {
         #region State
-        public static readonly Dictionary<string, double> Variables = new();
+        static readonly Dictionary<string, double> variables = new();
+        public static IReadOnlyDictionary<string, double> Variables => new ReadOnlyDictionary<string, double>(variables);
+        public static void ClearVariables() => variables.Clear();
         #endregion
 
         public abstract int Rank { get; }
@@ -34,6 +37,7 @@ namespace JA.Expressions
         /// </example>
         public abstract Expr PartialDerivative(SymbolExpr variable);
         public Expr PartialDerivative(string symbol) => PartialDerivative(Variable(symbol));
+
         public Expr PartialDerivative(Expr expr)
         {
             if (expr.IsSymbol(out string sym))
@@ -58,7 +62,7 @@ namespace JA.Expressions
         internal Expr TotalDerivative(ref List<string> paramsAndDots) 
         {
             var @params = paramsAndDots.Select( 
-                (item)=> ( item, (Expr)Variable(item).Dot() )).ToArray();
+                (item)=> ( item, Variable(item).Derivative() )).ToArray();
             return TotalDerivative(@params, ref paramsAndDots);
         }
         internal Expr TotalDerivative((string sym, Expr expr)[] parameters, ref List<string> paramsAndDots)
@@ -127,7 +131,8 @@ namespace JA.Expressions
         #endregion
 
         #region Factory
-        public static implicit operator Expr(string symbol) => Variable(symbol);
+        //public static implicit operator Expr(string symbol) => Variable(symbol);
+        public static implicit operator Expr(string expression) => Parse(expression);
         public static implicit operator Expr(double value) => Const(value);
         //public static implicit operator Expr(Expr[] array) => Array(array);
         public static implicit operator Expr(Vector vector) => Array(vector.Elements);
@@ -153,19 +158,26 @@ namespace JA.Expressions
 
         public static ValueExpr Const(double value)
         {
-            var result = new ValueExpr(value);
-            if (result.IsNamedConstant(out string symbol, out value))
-            {
-                return Const(symbol, value);
-            }
-            return result;
+            return new ValueExpr(value);
         }
 
-        public static NamedValueExpression Const(string name, double value) => new(name, value);
+        public static NamedValueExpression Const(string symbol, double value)
+        {
+            if (!variables.ContainsKey(symbol))
+            {
+                variables.Add(symbol, value);
+            }
+            else
+            {
+                variables[symbol] = value;
+            }
+            return new NamedValueExpression(symbol, value);
+        }
+
         public static SymbolExpr Variable(string name) => new(name);
 
         public static Expr Unary(UnaryOp Op, Expr Argument)
-        {
+        {            
             if (Argument.IsConstant(out double value))
             {
                 if (!Argument.IsNamedConstant(out _, out _))
@@ -173,6 +185,17 @@ namespace JA.Expressions
                     return Op.Function(value);
                 }
             }
+
+            if (Argument.IsAssign(out var leftAsgn, out var rightAsgn))
+            {
+                return Assign(Unary(Op, leftAsgn), Unary(Op, rightAsgn));
+            }
+            
+            if (Argument.IsArray(out var arrayExpr))
+            {
+                return Array(UnaryVectorOp(Op, arrayExpr));
+            }
+
             if (Op.Identifier=="+") return Argument;
             if (Argument.IsUnary(out string argOp, out Expr argArg))
             {
@@ -208,6 +231,35 @@ namespace JA.Expressions
                 }
                 return Op.Function(leftValue, rightValue);
             }
+            
+            if (Left.IsAssign(out var leftAsgnLeft, out var leftAsgnRight)
+                && Right.IsAssign(out var rightAsgnLeft, out var rightAsgnRight))
+            {
+                // (a=b) + (c=d) => (a+c) = (b+d)
+                return Assign(
+                    Binary(Op, leftAsgnLeft, rightAsgnLeft),
+                    Binary(Op, leftAsgnRight, rightAsgnRight));
+            }
+            if (Left.IsAssign(out leftAsgnLeft, out leftAsgnRight))
+            {
+                // (a=b) + c => (a+c) = (b+c)
+                return Assign(
+                    Binary(Op, leftAsgnLeft, Right),
+                    Binary(Op, leftAsgnRight, Right));
+            }
+            if (Right.IsAssign(out rightAsgnLeft, out rightAsgnRight))
+            {
+                // (a) + (c=d) => (a+c) = (a+d)
+                return Assign(
+                    Binary(Op, Left, rightAsgnLeft),
+                    Binary(Op, Left, rightAsgnRight));
+            }
+
+            if (IsVectorizable(Left, Right, out _, out var leftArray, out var rightArray))
+            {
+                return Array(BinaryVectorOp(Op, leftArray, rightArray));
+            }
+
             return new BinaryExpr(Op, Left, Right);
         }
 
@@ -319,12 +371,37 @@ namespace JA.Expressions
         #endregion
 
         #region Classification
+        public bool IsAssign(out Expr left, out Expr right)
+        {
+            if (this is AssignExpr assignExpr)
+            {
+                left = assignExpr.Left;
+                right = assignExpr.Right;
+                return true;
+            }
+            left = null;
+            right = null;
+            return false;
+        }
         public bool IsConstant(out double value)
         {
             if (this is ValueExpr vExpr)
             {
                 value = vExpr.Value;
                 return true;
+            }
+            if (this is SymbolExpr symExpr)
+            {
+                if (KnownConstDictionary.Defined.Contains(symExpr.Name))
+                {
+                    value = KnownConstDictionary.Defined[symExpr.Name].Value;
+                    return true;
+                }
+                if (Variables.ContainsKey(symExpr.Name))
+                {
+                    value = Variables[symExpr.Name];
+                    return true;
+                }
             }
             value = 0;
             return false;
@@ -337,16 +414,18 @@ namespace JA.Expressions
                 value = namedExpr.Value;
                 return true;
             }
-            if (this is ValueExpr valExpr)
+            if (this is SymbolExpr symExpr)
             {
-                int index = System.Array.FindIndex(
-                    KnownConstDictionary.Defined.ToArray(),
-                    (k)=> k.Value == valExpr.Value);
-                if (index>=0)
+                if (KnownConstDictionary.Defined.Contains(symExpr.Name))
                 {
-                    var op = KnownConstDictionary.Defined[index];
-                    symbol = op.Identifier;
-                    value = op.Value;
+                    symbol = symExpr.Name;
+                    value = KnownConstDictionary.Defined[symExpr.Name].Value;
+                    return true;
+                }
+                if (Variables.ContainsKey(symExpr.Name))
+                {
+                    symbol = symExpr.Name;
+                    value = Variables[symExpr.Name];
                     return true;
                 }
             }
@@ -356,11 +435,21 @@ namespace JA.Expressions
         }
         public bool IsNamedConstant(string symbol, out double value)
         {
-            if (this is NamedValueExpression namedExpr)
+            if (this is NamedValueExpression namedExpr && namedExpr.Name == symbol)
             {
-                if (namedExpr.Name == symbol)
+                value = namedExpr.Value;
+                return true;
+            }
+            if (this is SymbolExpr symExpr && symExpr.Name == symbol)
+            {
+                if (KnownConstDictionary.Defined.Contains(symExpr.Name))
                 {
-                    value = namedExpr.Value;
+                    value = KnownConstDictionary.Defined[symExpr.Name].Value;
+                    return true;
+                }
+                if (Variables.ContainsKey(symExpr.Name))
+                {
+                    value = Variables[symExpr.Name];
                     return true;
                 }
             }
@@ -374,6 +463,17 @@ namespace JA.Expressions
                 symbol = symExpr.Name;
                 return true;
             }
+            if (this is ValueExpr valExpr)
+            {
+                foreach (var item in KnownConstDictionary.Defined)
+                {
+                    if (item.Value == valExpr.Value)
+                    {
+                        symbol = item.Identifier;
+                        return true;
+                    }
+                }
+            }
             symbol = string.Empty;
             return false;
         }
@@ -382,6 +482,16 @@ namespace JA.Expressions
             if (this is SymbolExpr symExpr && symExpr.Name == symbol)
             {
                 return true;
+            }
+            if (this is ValueExpr valExpr)
+            {
+                foreach (var item in KnownConstDictionary.Defined)
+                {
+                    if (item.Value == valExpr.Value)
+                    {
+                        return symbol == item.Identifier;
+                    }
+                }
             }
             return false;
         }
@@ -604,25 +714,72 @@ namespace JA.Expressions
         #endregion
 
         #region Vectorization
-        public static bool IsVectorized(Expr a, Expr b, out Expr[] a_array, out Expr[] b_array)
+        internal static bool IsVectorizable(ref Expr[] leftArray, ref Expr[] rightArray, out int count)
         {
-            if (a.IsArray(out a_array) | b.IsArray(out b_array))
+            int lcount = leftArray.Length;
+            int rcount = rightArray.Length;
+            if (lcount < rcount)
             {
-                if (b_array == null)
+                var temp = new Expr[rcount];
+                int index = 0;
+                while (index<temp.Length)
                 {
-                    b_array = new Expr[a_array.Length];
-                    System.Array.Fill(b_array, b);
+                    System.Array.Copy(leftArray, 0, temp, index, Math.Min(lcount, temp.Length-index));
+                    index += lcount;
                 }
-                else if (a_array == null)
-                {
-                    a_array = new Expr[b_array.Length];
-                    System.Array.Fill(a_array, a);
-                }
-                return true;
+                leftArray = temp;
+                lcount = temp.Length;
             }
+            if (lcount > rcount)
+            {
+                var temp = new Expr[lcount];
+                var index = 0;
+                while (index<temp.Length)
+                {
+                    System.Array.Copy(rightArray, 0, temp, index, Math.Min(rcount, temp.Length-index));
+                    index += rcount;
+                }
+                rightArray = temp;
+                rcount = temp.Length;
+            }
+            count = Math.Max(lcount, rcount);
+            return true;
+        }
+        internal static bool IsVectorizable(Expr left, Expr right, out int count, out Expr[] leftArray, out Expr[] rightArray)
+        {
+            if (left.IsArray(out leftArray) && right.IsArray(out rightArray))
+            {
+                return IsVectorizable(ref leftArray, ref rightArray, out count);
+            }
+            else if (left.IsArray(out leftArray))
+            {
+                rightArray = new Expr[leftArray.Length];
+                System.Array.Fill(rightArray, right);
+                return IsVectorizable(ref leftArray, ref rightArray, out count);
+            }
+            else if (right.IsArray(out rightArray))
+            {
+                leftArray = new Expr[rightArray.Length];
+                System.Array.Fill(leftArray, left);
+                return IsVectorizable(ref leftArray, ref rightArray, out count);
+            }
+            // both scalar
+            count = 1;
+            leftArray = null;
+            rightArray = null;
             return false;
         }
-        static Expr[] UnaryVectorOp(Expr[] a_array, Func<Expr, Expr> op)
+        static Expr[] UnaryVectorOp(UnaryOp op, Expr[] a_array)
+        {
+            Expr[] result = new Expr[a_array.Length];
+            for (int i = 0; i < result.Length; i++)
+            {
+                result[i] = Unary(op, a_array[i]);
+            }
+            return result;
+        }
+
+        static Expr[] UnaryVectorOp(Func<Expr, Expr> op, Expr[] a_array)
         {
             Expr[] result = new Expr[a_array.Length];
             for (int i = 0; i < result.Length; i++)
@@ -631,7 +788,20 @@ namespace JA.Expressions
             }
             return result;
         }
-        static Expr[] BinaryVectorOp(Expr[] a_array, Expr[] b_array, Func<Expr, Expr, Expr> op)
+        static Expr[] BinaryVectorOp(BinaryOp op, Expr[] a_array, Expr[] b_array)
+        {
+            if (a_array.Length != b_array.Length)
+            {
+                throw new ArgumentException("Unequal lengths for vectors", nameof(b_array));
+            }
+            Expr[] result = new Expr[a_array.Length];
+            for (int i = 0; i < result.Length; i++)
+            {
+                result[i] = Binary(op, a_array[i], b_array[i]);
+            }
+            return result;
+        }
+        static Expr[] BinaryVectorOp(Func<Expr, Expr, Expr> op, Expr[] a_array, Expr[] b_array)
         {
             if (a_array.Length != b_array.Length)
             {
@@ -651,7 +821,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out Expr[] a_array))
             {
-                return Array(UnaryVectorOp(a_array, Negate));
+                return Array(UnaryVectorOp(Negate, a_array));
             }
             if (a.IsConstant(out double x))
             {
@@ -663,11 +833,33 @@ namespace JA.Expressions
             }
             return new UnaryExpr("-", a);
         }
+        public static Expr Assign(Expr a, Expr b)
+        {
+            // TODO: Handle special cases
+            if (IsVectorizable(a, b, out int count, out var leftArray, out var rightArray))
+            {
+                Expr[] array = new Expr[count];
+                for (int i = 0; i < array.Length; i++)
+                {
+                    array[i] = Assign(leftArray[i], rightArray[i]);
+                }
+                return Array(array);
+            }
+
+            if (a.IsSymbol(out string sym) && b.IsConstant(out double val))
+            {                
+                return Const(sym, val);
+            }
+
+            return new AssignExpr(a, b);
+        }
+
+
         public static Expr Add(Expr a, Expr b)
         {
-            if (IsVectorized(a, b, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
             {
-                return Array(BinaryVectorOp(a_array, b_array, Add));
+                return Array(BinaryVectorOp(Add, a_array, b_array));
             }
             if (a.IsConstant(out double x) && b.IsConstant(out double y))
             {
@@ -744,9 +936,9 @@ namespace JA.Expressions
         }
         public static Expr Subtract(Expr a, Expr b)
         {
-            if (IsVectorized(a, b, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
             {
-                return Array(BinaryVectorOp(a_array, b_array, Subtract));
+                return Array(BinaryVectorOp(Subtract, a_array, b_array));
             }
             if (a.IsConstant(out double x) && b.IsConstant(out double y))
             {
@@ -828,9 +1020,9 @@ namespace JA.Expressions
         }
         public static Expr Multiply(Expr a, Expr b)
         {
-            if (IsVectorized(a, b, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
             {
-                return Array(BinaryVectorOp(a_array, b_array, Multiply));
+                return Array(BinaryVectorOp(Multiply, a_array, b_array));
             }
             if (a.IsUnary("sqrt", out Expr argA)
                 && b.IsUnary("sqrt", out Expr argB))
@@ -875,7 +1067,6 @@ namespace JA.Expressions
                 }
                 if (Math.Abs(a_const)<0.2)
                 {
-                    Debug.WriteLine($"{a}*{b} = {b}*{1/a_const}");
                     return b/(1/a_const);
                 }
             }
@@ -975,9 +1166,9 @@ namespace JA.Expressions
 
         public static Expr Divide(Expr a, Expr b)
         {
-            if (IsVectorized(a, b, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
             {
-                return Array(BinaryVectorOp(a_array, b_array, Divide));
+                return Array(BinaryVectorOp(Divide, a_array, b_array));
             }
             if (a.IsConstant(out double x) && b.IsConstant(out double y))
             {
@@ -1028,7 +1219,6 @@ namespace JA.Expressions
                 }
                 if (Math.Abs(b_const)<0.2)
                 {
-                    Debug.WriteLine($"{a}/{b} = {1/b_const}*{a}");
                     return (1/b_const)*a;
                 }
             }
@@ -1098,13 +1288,25 @@ namespace JA.Expressions
         }
         public static Expr Power(Expr a, Expr b)
         {
-            if (IsVectorized(a, b, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
             {
-                return Array(BinaryVectorOp(a_array, b_array, Power));
+                return Array(BinaryVectorOp(Power, a_array, b_array));
+            }
+            if (b.IsConstant(out var bConst))
+            {
+                switch (bConst)
+                {
+                    case 0:
+                        return 1;
+                    case 1:
+                        return a;
+                    case -1:
+                        return 1/a;
+                }
             }
             if (a.IsConstant(out double aConst))
             {
-                if (b.IsConstant(out double bConst))
+                if (b.IsConstant(out bConst))
                 {
                     return Math.Pow(aConst, bConst);
                 }
@@ -1116,7 +1318,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Abs));
+                return Array(UnaryVectorOp(Abs, a_array));
             }
             var op = UnaryOp.FromMethod();
             if (a.IsConstant(out double x))
@@ -1137,7 +1339,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Sign));
+                return Array(UnaryVectorOp(Sign, a_array));
             }
             var op = UnaryOp.FromMethod();
             if (a.IsConstant(out double x))
@@ -1150,7 +1352,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Sqr));
+                return Array(UnaryVectorOp(Sqr, a_array));
             }
             if (a.IsConstant(out double x))
             {
@@ -1166,7 +1368,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Sqrt));
+                return Array(UnaryVectorOp(Sqrt, a_array));
             }
             if (a.IsBinary("*", out Expr argA, out Expr argB))
             {
@@ -1190,7 +1392,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Exp));
+                return Array(UnaryVectorOp(Exp, a_array));
             }
             if (a.IsUnary("log", out var a_arg))
             {
@@ -1211,7 +1413,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Ln));
+                return Array(UnaryVectorOp(Ln, a_array));
             }
             if (a.IsUnary("exp", out var a_arg))
             {
@@ -1228,7 +1430,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Sin));
+                return Array(UnaryVectorOp(Sin, a_array));
             }
             if (a.IsUnary("asin", out var a_arg))
             {
@@ -1245,7 +1447,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Cos));
+                return Array(UnaryVectorOp(Cos, a_array));
             }
             if (a.IsUnary("acos", out var a_arg))
             {
@@ -1262,7 +1464,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Tan));
+                return Array(UnaryVectorOp(Tan, a_array));
             }
             if (a.IsUnary("atan", out var a_arg))
             {
@@ -1279,7 +1481,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Sinh));
+                return Array(UnaryVectorOp(Sinh, a_array));
             }
             if (a.IsUnary("asinh", out var a_arg))
             {
@@ -1296,7 +1498,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Cosh));
+                return Array(UnaryVectorOp(Cosh, a_array));
             }
             if (a.IsUnary("acosh", out var a_arg))
             {
@@ -1313,7 +1515,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Tanh));
+                return Array(UnaryVectorOp(Tanh, a_array));
             }
             if (a.IsUnary("atanh", out var a_arg))
             {
@@ -1330,7 +1532,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Asin));
+                return Array(UnaryVectorOp(Asin, a_array));
             }
             if (a.IsUnary("sin", out var a_arg))
             {
@@ -1347,7 +1549,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Acos));
+                return Array(UnaryVectorOp(Acos, a_array));
             }
             if (a.IsUnary("cos", out var a_arg))
             {
@@ -1364,7 +1566,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Atan));
+                return Array(UnaryVectorOp(Atan, a_array));
             }
             if (a.IsUnary("tan", out var a_arg))
             {
@@ -1381,7 +1583,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Asinh));
+                return Array(UnaryVectorOp(Asinh, a_array));
             }
             if (a.IsUnary("sinh", out var a_arg))
             {
@@ -1398,7 +1600,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Acosh));
+                return Array(UnaryVectorOp(Acosh, a_array));
             }
             if (a.IsUnary("cosh", out var a_arg))
             {
@@ -1415,7 +1617,7 @@ namespace JA.Expressions
         {
             if (a.IsArray(out var a_array))
             {
-                return Array(UnaryVectorOp(a_array, Atanh));
+                return Array(UnaryVectorOp(Atanh, a_array));
             }
             if (a.IsUnary("tanh", out var a_arg))
             {

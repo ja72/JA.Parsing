@@ -12,7 +12,9 @@ namespace JA.Expressions
         public override int Rank => Max(Left.Rank, Right.Rank);
         protected internal override void Compile(ILGenerator gen, Dictionary<string, int> env)
         {
+            //IL_0001: ldarg.0
             Left.Compile(gen, env);
+            //IL_0002: ldarg.1
             Right.Compile(gen, env);
             switch (Op.Identifier)
             {
@@ -86,10 +88,6 @@ namespace JA.Expressions
             string largs = $"{Left.ToString(formatting, provider)}";
             string rargs = $"{Right.ToString(formatting, provider)}";
 
-            //var largs = Left.IsBinary(out _, out _, out _) ?
-            //    $"({Left.ToString(formatting, provider)})" :
-            //    $"{Left.ToString(formatting, provider)}";
-
             switch (Op.Identifier)
             {
                 case "+":
@@ -145,11 +143,12 @@ namespace JA.Expressions
                     }
                 case "^":
                     {
-                        if (Left.IsBinary(out var lop, out _, out _))
+                        if (Left.IsBinary(out _, out _, out _))
                         {
                             largs = $"({largs})";
                         }
-                        if (Right.IsBinary(out var rop, out _, out _))
+
+                        if (Right.IsBinary(out _, out _, out _))
                         {
                             rargs = $"({rargs})";
                         }

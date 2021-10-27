@@ -21,7 +21,7 @@ namespace JA.Expressions.Parsing
         public Expr ParseExpression()
         {
             // For the moment, all we understand is add and subtract
-            var expr = ParseAddSubtract();
+            var expr = ParseEquals();
 
             // Check everything was consumed
             if (tokenizer.Current.Token != Token.EOF)
@@ -31,6 +31,26 @@ namespace JA.Expressions.Parsing
         }
 
         // TODO: Parse assignments before add/subtract
+        Expr ParseEquals()
+        {
+            var lhs = ParseAddSubtract();
+
+            var token = tokenizer.Current.Token;
+
+            if (token == Token.Assign)
+            {
+                var op = token.GetOperand();
+                // Skip the operator
+                tokenizer.MoveNext();
+
+                // Parse the right hand side of the expression
+                var rhs = ParseAddSubtract();
+
+                return Expr.Assign(lhs, rhs);
+            }
+
+            return lhs;
+        }
 
         // Parse a sequence of add/subtract operators
         Expr ParseAddSubtract()
@@ -283,10 +303,10 @@ namespace JA.Expressions.Parsing
                     }
                 default:
                     {
-                        if (KnownConstDictionary.Defined.Contains(name))
-                        {
-                            return Expr.Const(name, KnownConstDictionary.Defined[name].Value);
-                        }
+                        //if (KnownConstDictionary.Defined.Contains(name))
+                        //{
+                        //    return Expr.Variable(name, KnownConstDictionary.Defined[name].Value);
+                        //}
                         // Variable
                         return Expr.Variable(name);
                     }
