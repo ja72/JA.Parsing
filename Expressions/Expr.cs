@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace JA.Expressions
 {
-using System.Collections.ObjectModel;
+    using System.Collections.ObjectModel;
     using System.Diagnostics;
     using System.Xml.Linq;
     using JA.Expressions.Parsing;
@@ -56,12 +56,33 @@ using System.Collections.ObjectModel;
             }
             return Array(array);
         }
+
+        public bool ExtractLinearSystem(string[] symbols, out Matrix A, out Vector b)
+        {
+            A = null;
+            b = null;
+            if (IsAssign(out var lhs, out var rhs))
+            {
+                return (lhs-rhs).ExtractLinearSystem(symbols, out A, out b);
+            }
+            var Jt = Transpose(Jacobian(symbols));
+            if (Jt.IsConstMatrix(out A))
+            {
+                var zeros = Expr.Array( new double[symbols.Length] ).ToArray();
+                var r = -Substitute(symbols, zeros);
+                if (r.IsConstVector(out b))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         #endregion
 
         #region Methods
-        internal Expr TotalDerivative(ref List<string> paramsAndDots) 
+        internal Expr TotalDerivative(ref List<string> paramsAndDots)
         {
-            var @params = paramsAndDots.Select( 
+            var @params = paramsAndDots.Select(
                 (item)=> ( item, Variable(item).Derivative() )).ToArray();
             return TotalDerivative(@params, ref paramsAndDots);
         }
@@ -110,7 +131,10 @@ using System.Collections.ObjectModel;
             }
             return result;
         }
-
+        public Expr Substitute(string[] variables, Expr[] values)
+        {
+            return Substitute(variables.Zip(values, (x, y) => (x, y)).ToArray());
+        }
         public string[] GetSymbols(bool alphabetically = true)
         {
             var all = new List<string>();
@@ -177,7 +201,7 @@ using System.Collections.ObjectModel;
         public static SymbolExpr Variable(string name) => new(name);
 
         public static Expr Unary(UnaryOp Op, Expr Argument)
-        {            
+        {
             if (Argument.IsConstant(out double value))
             {
                 if (!Argument.IsNamedConstant(out _, out _))
@@ -190,7 +214,7 @@ using System.Collections.ObjectModel;
             {
                 return Assign(Unary(Op, leftAsgn), Unary(Op, rightAsgn));
             }
-            
+
             if (Argument.IsArray(out var arrayExpr))
             {
                 return Array(UnaryVectorOp(Op, arrayExpr));
@@ -231,7 +255,7 @@ using System.Collections.ObjectModel;
                 }
                 return Op.Function(leftValue, rightValue);
             }
-            
+
             if (Left.IsAssign(out var leftAsgnLeft, out var leftAsgnRight)
                 && Right.IsAssign(out var rightAsgnLeft, out var rightAsgnRight))
             {
@@ -255,7 +279,7 @@ using System.Collections.ObjectModel;
                     Binary(Op, Left, rightAsgnRight));
             }
 
-            if (IsVectorizable(Left, Right, out _, out var leftArray, out var rightArray))
+            if (IsVectorizable(Left, Right, out var leftArray, out var rightArray))
             {
                 return Array(BinaryVectorOp(Op, leftArray, rightArray));
             }
@@ -379,9 +403,57 @@ using System.Collections.ObjectModel;
                 right = assignExpr.Right;
                 return true;
             }
+            if (IsArray(out var arrayExpr))
+            {
+                if (MakeAssignment(arrayExpr, out var lhsExpr, out var rhsExpr))
+                {
+                    left = Array(lhsExpr);
+                    right = Array(rhsExpr);
+                    return true;
+                }
+            }
             left = null;
             right = null;
             return false;
+        }
+        public static bool MakeAssignment(Expr expr, out Expr lhsExpr, out Expr rhsExpr)
+        {
+            if (expr.IsAssign(out lhsExpr, out rhsExpr))
+            {
+                return true;
+            }
+            if (expr.IsArray(out var arrayExpr))
+            {
+                var ok = MakeAssignment(arrayExpr, out var lhsArray, out var rhsArray);
+                lhsExpr = Array(lhsArray);
+                rhsExpr = Array(rhsArray);
+                return ok;
+            }
+            lhsExpr = expr;
+            rhsExpr = 0;
+            return true;
+        }
+        public static bool MakeAssignment(Expr[] arrayExpr, out Expr[] lhsExpr, out Expr[] rhsExpr)
+        {
+            lhsExpr = new Expr[arrayExpr.Length];
+            rhsExpr = new Expr[arrayExpr.Length];
+            bool ok = false;
+            for (int i = 0; i < arrayExpr.Length; i++)
+            {
+                if (arrayExpr[i].IsAssign(out var lhs, out var rhs))
+                {
+                    ok = true;
+                    lhsExpr[i] = lhs;
+                    rhsExpr[i] = rhs;
+                }
+                else if(MakeAssignment(arrayExpr[i], out lhs, out rhs))
+                {
+                    lhsExpr[i] = lhs;
+                    rhsExpr[i] = rhs;
+                }
+            }
+
+            return ok;
         }
         public bool IsConstant(out double value)
         {
@@ -584,6 +656,11 @@ using System.Collections.ObjectModel;
             return false;
         }
 
+        public bool IsScalar()
+        {
+            return !(this is ArrayExpr);
+        }
+
         public bool IsArray(out Expr[] elements)
         {
             if (this is ArrayExpr arrayExpr)
@@ -594,6 +671,17 @@ using System.Collections.ObjectModel;
             elements = null;
             return false;
         }
+        public bool IsVector(out Expr[] elements)
+        {
+            if (this is ArrayExpr arrayExpr)
+            {
+                elements = arrayExpr.Elements;
+                return !elements.Any((item) => item.IsArray(out _));
+            }
+            elements = null;
+            return false;
+        }
+
         public bool IsMatrix(out Expr[][] elements)
         {
             if (IsArray(out var rows))
@@ -613,6 +701,60 @@ using System.Collections.ObjectModel;
                 return true;
             }
             elements = null;
+            return false;
+        }
+
+        static bool ExtractVector(Expr[] exprVector, out double[] elements)
+        {
+            elements = new double[exprVector.Length];
+            for (int i = 0; i < elements.Length; i++)
+            {
+                if (exprVector[i].IsConstant(out var x))
+                {
+                    elements[i] =x;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public bool IsConstVector(out Vector vector)
+        {
+            vector  = null;
+            if (IsVector(out var exprVector))
+            {
+                if (ExtractVector(exprVector, out var row))
+                {
+                    vector = new Vector(row);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        public bool IsConstMatrix(out Matrix matrix)
+        {
+            matrix = null;
+            if (IsMatrix(out var exprMatrix))
+            {
+                double[][] elements = new double[exprMatrix.Length][];
+                for (int i = 0; i < elements.Length; i++)
+                {
+                    if (ExtractVector(exprMatrix[i], out var row))
+                    {
+                        elements[i] = row;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                matrix = new Matrix(elements);
+                return true;
+            }
             return false;
         }
 
@@ -677,30 +819,6 @@ using System.Collections.ObjectModel;
             }
             return new[] { new[] { this } };
         }
-        public static Expr Transpose(Expr right)
-        {
-            if (right.IsMatrix(out var matrix))
-            {
-                return Matrix(Transpose(matrix));
-            }
-            return right;
-        }
-        public static Expr[][] Transpose(Expr[][] matrix)
-        {
-            int n = matrix.Length;
-            int m = n>0 ? matrix[0].Length : 0;
-            var result = new Expr[m][];
-            for (int i = 0; i < result.Length; i++)
-            {
-                var row = new Expr[n];
-                for (int j = 0; j < row.Length; j++)
-                {
-                    row[j] = matrix[j][i];
-                }
-                result[i] = row;
-            }
-            return result;
-        }
         #endregion
 
         #region Operators
@@ -714,7 +832,11 @@ using System.Collections.ObjectModel;
         #endregion
 
         #region Vectorization
-        internal static bool IsVectorizable(ref Expr[] leftArray, ref Expr[] rightArray, out int count)
+        internal static bool IsVectorizable(Expr[] leftArray, Expr[] rightArray)
+        {
+            return leftArray.Length == rightArray.Length;
+        }
+        internal static bool MakeVectorizable(ref Expr[] leftArray, ref Expr[] rightArray, out int count)
         {
             int lcount = leftArray.Length;
             int rcount = rightArray.Length;
@@ -745,26 +867,25 @@ using System.Collections.ObjectModel;
             count = Math.Max(lcount, rcount);
             return true;
         }
-        internal static bool IsVectorizable(Expr left, Expr right, out int count, out Expr[] leftArray, out Expr[] rightArray)
+        internal static bool IsVectorizable(Expr left, Expr right, out Expr[] leftArray, out Expr[] rightArray, bool makeConformal = false)
         {
             if (left.IsArray(out leftArray) && right.IsArray(out rightArray))
             {
-                return IsVectorizable(ref leftArray, ref rightArray, out count);
+                return IsVectorizable(leftArray, rightArray);
             }
-            else if (left.IsArray(out leftArray))
+            else if (left.IsArray(out leftArray) && makeConformal)
             {
                 rightArray = new Expr[leftArray.Length];
                 System.Array.Fill(rightArray, right);
-                return IsVectorizable(ref leftArray, ref rightArray, out count);
+                return MakeVectorizable(ref leftArray, ref rightArray, out var count);
             }
-            else if (right.IsArray(out rightArray))
+            else if (right.IsArray(out rightArray) && makeConformal)
             {
                 leftArray = new Expr[rightArray.Length];
                 System.Array.Fill(leftArray, left);
-                return IsVectorizable(ref leftArray, ref rightArray, out count);
+                return MakeVectorizable(ref leftArray, ref rightArray, out var count);
             }
             // both scalar
-            count = 1;
             leftArray = null;
             rightArray = null;
             return false;
@@ -836,9 +957,9 @@ using System.Collections.ObjectModel;
         public static Expr Assign(Expr a, Expr b)
         {
             // TODO: Handle special cases
-            if (IsVectorizable(a, b, out int count, out var leftArray, out var rightArray))
+            if (IsVectorizable(a, b, out var leftArray, out var rightArray))
             {
-                Expr[] array = new Expr[count];
+                Expr[] array = new Expr[leftArray.Length];
                 for (int i = 0; i < array.Length; i++)
                 {
                     array[i] = Assign(leftArray[i], rightArray[i]);
@@ -847,7 +968,7 @@ using System.Collections.ObjectModel;
             }
 
             if (a.IsSymbol(out string sym) && b.IsConstant(out double val))
-            {                
+            {
                 return Const(sym, val);
             }
 
@@ -857,7 +978,7 @@ using System.Collections.ObjectModel;
 
         public static Expr Add(Expr a, Expr b)
         {
-            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out var a_array, out var b_array))
             {
                 return Array(BinaryVectorOp(Add, a_array, b_array));
             }
@@ -936,7 +1057,7 @@ using System.Collections.ObjectModel;
         }
         public static Expr Subtract(Expr a, Expr b)
         {
-            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out var a_array, out var b_array))
             {
                 return Array(BinaryVectorOp(Subtract, a_array, b_array));
             }
@@ -1020,7 +1141,7 @@ using System.Collections.ObjectModel;
         }
         public static Expr Multiply(Expr a, Expr b)
         {
-            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out var a_array, out var b_array))
             {
                 return Array(BinaryVectorOp(Multiply, a_array, b_array));
             }
@@ -1166,7 +1287,7 @@ using System.Collections.ObjectModel;
 
         public static Expr Divide(Expr a, Expr b)
         {
-            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out var a_array, out var b_array))
             {
                 return Array(BinaryVectorOp(Divide, a_array, b_array));
             }
@@ -1288,7 +1409,7 @@ using System.Collections.ObjectModel;
         }
         public static Expr Power(Expr a, Expr b)
         {
-            if (IsVectorizable(a, b, out _, out var a_array, out var b_array))
+            if (IsVectorizable(a, b, out var a_array, out var b_array))
             {
                 return Array(BinaryVectorOp(Power, a_array, b_array));
             }
@@ -1634,7 +1755,70 @@ using System.Collections.ObjectModel;
         #endregion
 
         #region Vector Functions
-        public static Expr Cross(Expr A, Expr[] B)
+        public static Expr Transpose(Expr right)
+        {
+            if (right.IsMatrix(out var matrix))
+            {
+                return Matrix(Transpose(matrix));
+            }
+            return right;
+        }
+        public static Expr[][] Transpose(Expr[][] matrix)
+        {
+            int n = matrix.Length;
+            int m = n>0 ? matrix[0].Length : 0;
+            var result = new Expr[m][];
+            for (int i = 0; i < result.Length; i++)
+            {
+                var row = new Expr[n];
+                for (int j = 0; j < row.Length; j++)
+                {
+                    row[j] = matrix[j][i];
+                }
+                result[i] = row;
+            }
+            return result;
+        }
+
+        public static Expr Dot(Expr A, Expr B)
+        {
+            if (IsVectorizable(A, B, out var arrayA, out var arrayB))
+            {
+                return Dot(arrayA, arrayB);
+            }
+            throw new ArgumentException("Vectors must be of equal length.", nameof(B));
+        }
+        public static Expr Dot(Expr[] A, Expr[] B)
+        {
+            if (A.Length==B.Length)
+            {
+                Expr sum = 0;
+                for (int i = 0; i < A.Length; i++)
+                {
+                    sum += A[i]*B[i];
+                }
+                return sum;
+            }
+            throw new ArgumentException("Vectors must be of equal length.", nameof(B));
+        }
+
+        public static Expr Cross(Expr A, Expr B)
+        {
+            if (IsVectorizable(A, B, out var vectorA, out var vectorB))
+            {
+                return Cross(vectorA, vectorB);
+            }
+            else if (A.IsVector(out vectorA))
+            {
+                return Cross(vectorA, B);
+            }
+            else if (B.IsVector(out vectorB))
+            {
+                return Cross(A, vectorB);
+            }
+            throw new NotSupportedException("Unknown cross product dimensions.");
+        }
+    public static Expr Cross(Expr A, Expr[] B)
         {
             if (B.Length==2)
             {

@@ -21,7 +21,7 @@ namespace JA.Expressions.Parsing
         public Expr ParseExpression()
         {
             // For the moment, all we understand is add and subtract
-            var expr = ParseEquals();
+            var expr = ParseArray();
 
             // Check everything was consumed
             if (tokenizer.Current.Token != Token.EOF)
@@ -30,8 +30,52 @@ namespace JA.Expressions.Parsing
             return expr;
         }
 
-        // TODO: Parse assignments before add/subtract
-        Expr ParseEquals()
+        // TODO: Parse arrays before assignment
+
+        Expr ParseArray()
+        {
+            var token = tokenizer.Current.Token;
+            switch (token)
+            {
+                case Token.OpenBracket:
+                    // Skip '['
+                    tokenizer.MoveNext();
+
+                    // Parse arguments
+                    var arguments = new List<Expr>();
+                    while (true)
+                    {
+                        var lhs = ParseAssignment();
+                        // Parse argument and add to list
+                        // TODO: Parse arrays as elements first
+                        arguments.Add(lhs);
+
+                        // Is there another argument?
+                        if (tokenizer.Current.Token == Token.Comma)
+                        {
+                            tokenizer.MoveNext();
+                            continue;
+                        }
+
+                        // Get out
+                        break;
+                    }
+
+                    // Check and skip ')'
+                    if (tokenizer.Current.Token != Token.CloseBracket)
+                        throw new SyntaxException("Missing close bracket");
+                    tokenizer.MoveNext();
+
+                    // Create the vector expression
+                    if (arguments.Count==0) return Expr.Array(Array.Empty<Expr>());
+                    // INFO: Do I want to cast an array of one as a scalar?
+                    // if (arguments.Count==1) return arguments[0];
+                    return Expr.Array(arguments);
+            }
+            return ParseAssignment();
+        }
+
+        Expr ParseAssignment()
         {
             var lhs = ParseAddSubtract();
 
@@ -198,6 +242,7 @@ namespace JA.Expressions.Parsing
                     node = Expr.Const(tokenizer.Current.Number);
                     tokenizer.MoveNext();
                     return node;
+
                 case Token.OpenBracket:
                     // Skip '['
                     tokenizer.MoveNext();
@@ -207,7 +252,8 @@ namespace JA.Expressions.Parsing
                     while (true)
                     {
                         // Parse argument and add to list
-                        arguments.Add(ParseAddSubtract());
+                        // TODO: Parse arrays as elements first
+                        arguments.Add(ParseAssignment());
 
                         // Is there another argument?
                         if (tokenizer.Current.Token == Token.Comma)

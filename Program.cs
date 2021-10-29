@@ -14,10 +14,12 @@ namespace JA
         static int testIndex = 0;
         static void Main(string[] args)
         {
+
             ParseExpressionDemo();
             CompileExpressionDemo();
             SimplifyExpressionDemo();
             AssignExpressionDemo();
+            SystemOfEquationsDemo();
             //FormattingTest();
             //MultiVarTest();
             CalculusExprDemo();
@@ -128,7 +130,7 @@ namespace JA
             Console.WriteLine($"{++index,3}. ({a}*x)-({b}/y) = {(a*x)-(b/y)}");
             Console.WriteLine($"{++index,3}. ({a}/x)+({b}/y) = {(a/x)+(b/y)}");
             Console.WriteLine($"{++index,3}. ({a}/x)-({b}/y) = {(a/x)-(b/y)}");
-                                        
+
             Console.WriteLine($"{++index,3}. ({a}+x)*({b}+y) = {(a+x)*(b+y)}");
             Console.WriteLine($"{++index,3}. ({a}+x)/({b}+y) = {(a+x)/(b+y)}");
             Console.WriteLine($"{++index,3}. ({a}-x)*({b}+y) = {(a-x)*(b+y)}");
@@ -228,7 +230,7 @@ namespace JA
         static void AssignExpressionDemo()
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
-            
+
             Expr.ClearVariables();
 
             var input = "a+b = (2*a+2*b)/2";
@@ -257,8 +259,55 @@ namespace JA
 
             Console.WriteLine();
         }
+        static void SystemOfEquationsDemo()
+        {
+            Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
+            Expr.ClearVariables();
 
-        static string GetMethodName([CallerMemberName] string name = null) 
+            Console.WriteLine("Define a 3×3 system of equations.");
+            var system = Expr.Parse("[2*x-y+3*z=15, x + 3*z/2 = 3, x+3*y = 1]");
+            var vars = new[] { "x", "y", "z" };
+
+            Console.WriteLine(system);
+            Console.WriteLine();
+            if (system.ExtractLinearSystem(vars, out Matrix A, out Vector b))
+            {
+                Console.WriteLine($"Unknowns: {string.Join(",", vars)}");
+                Console.WriteLine();
+                ShowMatrix("Coefficient Matrix A=", A);
+
+                Console.WriteLine();
+                ShowVector("Constant Vector b=", b);
+
+                var x = A.Solve(b);
+                ShowVector("Solution Vector x=", x);
+
+                var r = b-A*x;
+                ShowVector("Residual Vector r=", r);
+            }
+
+            Console.WriteLine();
+
+        }
+
+        static void ShowVector(string title, Vector x, string formatting = "g4", int columnWidth = 6)
+        {
+            Console.WriteLine(title);
+            for (int i = 0; i < x.Size; i++)
+            {
+                Console.WriteLine($"| {x.Elements[i].ToString(formatting).PadLeft(columnWidth)} |");
+            }
+        }
+        static void ShowMatrix(string title, Matrix A, string formatting = "g4", int columnWidth = 6)
+        {
+            Console.WriteLine(title);
+            for (int i = 0; i < A.Rows; i++)
+            {
+                Console.WriteLine($"| {string.Join(" ", A.Elements[i].Select(x=>x.ToString(formatting).PadLeft(columnWidth)))} |");
+            }
+        }
+
+        static string GetMethodName([CallerMemberName] string name = null)
         {
             return name;
         }

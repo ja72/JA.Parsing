@@ -59,6 +59,8 @@ namespace JA.Expressions
             return new Function($"{Name}_{variable}", body, Parameters);
         }
 
+        public Expr Jacobian() => Body.Jacobian(Parameters);
+
         public IQuantity NewtonRaphson(IQuantity init, double target = 0, double tolerance = 1e-11, int maxIter = 100)
         {
             if (init.IsScalar && Parameters.Length != 1)
