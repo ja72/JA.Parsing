@@ -8,6 +8,7 @@ namespace JA.Expressions
 {
     public record ArrayExpr : Expr
     {
+
         public ArrayExpr(Expr[] elements)
         {
             Elements=elements;
@@ -70,7 +71,7 @@ namespace JA.Expressions
             return new ArrayExpr(Elements.Select((item) => item.Substitute(variable, value)).ToArray());
         }
 
-        public override Expr PartialDerivative(SymbolExpr symbol)
+        public override Expr PartialDerivative(VariableExpr symbol)
         {
             return new ArrayExpr(Elements.Select((item) => item.PartialDerivative(symbol)).ToArray());
         }

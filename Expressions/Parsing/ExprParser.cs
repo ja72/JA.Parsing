@@ -3,12 +3,8 @@ using System.Collections.Generic;
 
 namespace JA.Expressions.Parsing
 {
-    internal interface IParser<TExpr> where TExpr : IExpression<TExpr>
-    {
-        TExpr ParseExpression();
-    }
 
-    internal class ExprParser : IParser<Expr>
+    internal class ExprParser 
     {
         private readonly Tokenizer tokenizer;
 
@@ -316,6 +312,23 @@ namespace JA.Expressions.Parsing
                             throw new SyntaxException("Missing close parenthesis");
                         tokenizer.MoveNext();
 
+                        // catch special functions here
+                        switch (name)
+                        {
+                            case "sum":
+                                return Expr.Sum(arguments.ToArray());
+                            case "dot" when arguments.Count==2:
+                                return Expr.Dot(arguments[0], arguments[1]);
+                            case "outer" when arguments.Count==2:
+                                return Expr.Outer(arguments[0], arguments[1]);
+                            case "hypot" when arguments.Count==2:
+                                return Expr.Hypot(arguments[0], arguments[1]);
+                            case "norm":
+                                return Expr.Norm(arguments.ToArray());
+                            case "cross" when arguments.Count==2:
+                                return Expr.Cross(arguments[0], arguments[1]);
+                        }
+
                         // Create the function call node
                         return arguments.Count switch
                         {
@@ -343,18 +356,12 @@ namespace JA.Expressions.Parsing
                             throw new SyntaxException("Missing close bracket");
                         tokenizer.MoveNext();
 
-                        return Expr.ArrayIndex(name, index);
-
                         throw new NotSupportedException("Array Elements not supported yet.");
                     }
                 default:
                     {
-                        //if (KnownConstDictionary.Defined.Contains(name))
-                        //{
-                        //    return Expr.Variable(name, KnownConstDictionary.Defined[name].Value);
-                        //}
                         // Variable
-                        return Expr.Variable(name);
+                        return Expr.ConstOrVariable(name);
                     }
             }
         }

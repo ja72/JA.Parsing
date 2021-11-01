@@ -24,10 +24,20 @@ namespace JA
         [Op("pi")] public static readonly double PI = Math.PI;
         [Op("deg")] public static readonly double Deg = Math.PI/180;
         [Op("rad")] public static readonly double Rad = 180/Math.PI;
-        [Op("rpm")] public static readonly double Rpm = 2*Math.PI / 60;
+        [Op("rpm")] public static readonly double Rpm = Math.PI/30;
         [Op("e")] public static readonly double E = Math.E;
         [Op("Φ")] public static readonly double Phi = (1 + Math.Sqrt(5)) / 2;
 
+        public static bool IsConst(string symbol, out ConstOp op)
+        {
+            if (KnownConstDictionary.Defined.Contains(symbol))
+            {
+                op = KnownConstDictionary.Defined[symbol];
+                return true;
+            }
+            op = null;
+            return false;
+        }
     }
 
     public record UnaryOp(string Identifier, FArg1 Function, MethodInfo Method) : Operation(Identifier)
@@ -76,6 +86,17 @@ namespace JA
         [Op("acosh")] public static double Acosh(double x) => Math.Acosh(x);
         [Op("atanh")] public static double Atanh(double x) => Math.Atanh(x);
 
+        public static bool IsUnary(string name, out UnaryOp op)
+        {
+            if (KnownUnaryDictionary.Defined.Contains(name))
+            {
+                op = KnownUnaryDictionary.Defined[name];
+                return true;
+            }
+            op = null;
+            return false;
+        }
+
     }
     public record BinaryOp(string Identifier, FArg2 Function, MethodInfo Method) : Operation(Identifier)
     {
@@ -95,6 +116,17 @@ namespace JA
         [Op("min")] public static double Max(double x, double y) => Math.Min(x, y);
         [Op("max")] public static double Min(double x, double y) => Math.Max(x, y);
         [Op("atan2")] public static double Atan2(double dy, double dx) => Math.Atan2(dy, dx);
+
+        public static bool IsBinary(string name, out BinaryOp op)
+        {
+            if (KnownBinaryDictionary.Defined.Contains(name))
+            {
+                op = KnownBinaryDictionary.Defined[name];
+                return true;
+            }
+            op = null;
+            return false;
+        }
 
     }
 

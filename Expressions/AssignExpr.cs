@@ -57,7 +57,7 @@ namespace JA.Expressions
         {
             return Assign(Left.Substitute(variable, value), Right.Substitute(variable, value));
         }
-        public override Expr PartialDerivative(SymbolExpr param)
+        public override Expr PartialDerivative(VariableExpr param)
         {
             var x = Left;
             var y = Right;

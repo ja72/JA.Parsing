@@ -54,7 +54,7 @@ namespace JA.Expressions
                     break;
             }
         }
-        public override Expr PartialDerivative(SymbolExpr param)
+        public override Expr PartialDerivative(VariableExpr param)
         {
             var x = Argument;
             var xp = x.PartialDerivative(param);

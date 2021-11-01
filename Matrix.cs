@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace JA
 {
@@ -8,16 +9,17 @@ namespace JA
         public static readonly Matrix Empty = Array.Empty<double[]>();
         public static implicit operator Matrix(double[][] matrix) => new(matrix);
         public static implicit operator double[][](Matrix matrix) => matrix.Elements;
+        #region Factory
         public Matrix(Vector[] matrix) :
             this(matrix.Select(row => row.Elements).ToArray())
         { }
         public Matrix(int rows, int columns)
-            : this(CreateJagged(rows,columns))
+            : this(CreateJagged(rows, columns))
         { }
-        public Matrix(int rows, int columns, Func<int,int,double> initializer)
+        public Matrix(int rows, int columns, Func<int, int, double> initializer)
             : this(CreateJagged(rows, columns, initializer))
         { }
-        static double[][] CreateJagged(int rows, int columns, Func<int,int,double> initializer = null)
+        static double[][] CreateJagged(int rows, int columns, Func<int, int, double> initializer = null)
         {
             var result = new double[rows][];
             for (int i = 0; i < rows; i++)
@@ -35,7 +37,7 @@ namespace JA
             return result;
         }
 
-        public static Matrix Block(Matrix A, Vector b, Vector c, double d) 
+        public static Matrix Block(Matrix A, Vector b, Vector c, double d)
         {
             var result = CreateJagged(A.Rows+1, A.Columns+1);
             for (int i = 0; i < A.Rows; i++)
@@ -49,7 +51,7 @@ namespace JA
             return new Matrix(result);
         }
 
-        public bool GetBlock(out Matrix A, out Vector b, out Vector c, out double d) 
+        public bool GetBlock(out Matrix A, out Vector b, out Vector c, out double d)
         {
             if (Rows>1 && Columns>1)
             {
@@ -62,16 +64,23 @@ namespace JA
             A = null;
             b = null;
             c = null;
-            if (Rows==1 && Columns==1)
-            {
-                d = Elements[0][0];
-            }
-            else
-            {
-                d = 0;
-            }
+            d = 0;
             return false;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix Zeros(int rows, int columns)
+        {
+            return new Matrix(rows, columns);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix Identity(int size) => Diagonal(size, 1.0);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix Diagonal(int size, double value)
+            => new(CreateJagged(size, size, (i, j) => i==j ? value : 0));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix Diagonal(Vector vector)
+            => new(CreateJagged(vector.Size, vector.Size, (i, j) => i==j ? vector[i] : 0));
+        #endregion
 
         public int Rank { get => 2; }
         public int Rows { get => Elements.Length; }
@@ -154,16 +163,6 @@ namespace JA
         #endregion
 
         #region Algebra
-
-        public static Matrix Zero(int rows, int columns)
-        {
-            return new Matrix(rows, columns);
-        }
-        public static Matrix Identity(int rows, int columns)
-        {
-            return new Matrix(rows, columns, (i,j)=> i==j ? 1 : 0);
-        }
-        public static Matrix Identity(int size) => Identity(size, size);
 
         public static Matrix Add(Matrix A, Matrix B)
         {
@@ -270,7 +269,7 @@ namespace JA
             return result;
         }
 
-        public Matrix Inverse() => Solve(Identity(Rows, Columns));
+        public Matrix Inverse() => Solve(Identity(Rows));
         public Vector Solve(Vector vector)
         {
             if (Rows != vector.Size)
@@ -284,20 +283,20 @@ namespace JA
             }
             if (GetBlock(out var A, out var b, out var c, out var d))
             {
-                Vector u = vector[..^1];
-                double y = vector[^1];
+                if (vector.GetBlock(out var u, out var y))
+                {
+                    var Au = A.Solve(u);
+                    var Ab = A.Solve(b);
 
-                var Au = A.Solve(u);
-                var Ab = A.Solve(b);
+                    double x = (y - Vector.Dot(c, Au))/(d - Vector.Dot(c,Ab));
+                    Vector v = Au - x*Ab;
 
-                double x = (y - Vector.Dot(c, Au))/(d - Vector.Dot(c,Ab));
-                Vector v = A.Solve(u - x*b);
+                    var result = new double[Rows];
+                    Array.Copy(v.Elements, result, result.Length-1);
+                    result[^1] = x;
 
-                var result = new double[Rows];
-                Array.Copy(v.Elements, result, result.Length-1);
-                result[^1] = x;
-
-                return result;
+                    return result;
+                }
             }
             throw new ArgumentException("Invalid inputs.", nameof(vector));
         }

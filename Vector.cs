@@ -24,10 +24,28 @@ namespace JA
             return result;
         }
 
-        public static Vector Zero(int size) => new Vector(size);
+        public static Vector Zero(int size) => new(size);
         public static Vector Elemental(int size, int oneIndex)
-            => new Vector(size, (i) => i==oneIndex ? 1 : 0);
-
+            => new(size, (i) => i==oneIndex ? 1 : 0);
+        public static Vector Block(Vector vector, double scalar)
+        {
+            var result = new double[vector.Size+1];
+            Array.Copy(vector.Elements, result, vector.Size);
+            result[^1] = scalar;
+            return new Vector(result);
+        }
+        public bool GetBlock(out Vector vector, out double scalar)
+        {
+            if (Size>1)
+            {
+                vector = Elements[..^1];
+                scalar = Elements[^1];
+                return true;
+            }
+            vector = null;
+            scalar = 0;
+            return false;
+        }
         public int Rank { get => 1; }
         public int Size { get => Elements.Length; }
         double IQuantity.Value { get => 0; }
@@ -40,6 +58,14 @@ namespace JA
         {
             var (offset, length)= range.GetOffsetAndLength(Elements.Length);
             return new ReadOnlySpan<double>(Elements, offset, length);
+        }
+
+
+        public double[] Slice(int start, int length)
+        {
+            var slice = new double[length];
+            Array.Copy(Elements, start, slice, 0, length);
+            return slice;
         }
 
         #region Formatting
@@ -88,7 +114,7 @@ namespace JA
             return sum;
         }
 
-        public static Matrix Outer(Vector A, Vector B) => new Matrix(A.Size, B.Size, (i, j) 
+        public static Matrix Outer(Vector A, Vector B) => new(A.Size, B.Size, (i, j) 
             => A.Elements[i]*B.Elements[j]);
 
         #endregion

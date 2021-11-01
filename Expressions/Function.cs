@@ -146,7 +146,7 @@ namespace JA.Expressions
         #region Algebra
         public Function Substitute(string name, params (string symbol, double values)[] parameters)
         {
-            List<string> arg = new List<string>(Parameters);
+            List<string> arg = new(Parameters);
             Expr expr = Body.Substitute(parameters);
             foreach (var (symbol, _) in parameters)
             {
@@ -156,7 +156,7 @@ namespace JA.Expressions
         }
         public Function Substitute(string name, params (string symbol, Expr subExpression)[] parameters)
         {
-            List<string> arg = new List<string>(Parameters);
+            List<string> arg = new(Parameters);
             Expr expr = Body.Substitute(parameters);
             foreach (var (symbol, _) in parameters)
             {

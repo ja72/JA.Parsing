@@ -19,33 +19,6 @@ namespace JA
     public delegate IQuantity QArg1(double arg1);
     public delegate IQuantity QArg2(double arg1, double arg2);
 
-    public interface IExpression : IFormattable
-    {
-        string[] GetSymbols(bool alphabetically = true);
-        double[] GetValues();
-        int Rank { get; }
-        IQuantity Eval(params (string sym, double val)[] parameters);
-        void Compile(ILGenerator gen, Dictionary<string, int> env);
-        bool IsConstant(out double value);
-        bool IsNamedConstant(out string symbol, out double value);
-        bool IsNamedConstant(string symbol, out double value);
-        bool IsSymbol(out string symbol);
-        bool IsSymbol(string symbol);
-    }
-
-    public interface IExpression<TExpr> : IExpression where TExpr : IExpression<TExpr>
-    {
-        bool IsArray(out TExpr[] elements);
-        bool IsBinary(out string operation, out TExpr left, out TExpr right);
-        bool IsBinary(string operation, out TExpr left, out TExpr right);
-        bool IsMatrix(out TExpr[][] elements);
-        bool IsUnary(out string operation, out TExpr argument);
-        bool IsUnary(string operation, out TExpr argument);
-        TExpr Substitute(params (string sym, TExpr expr)[] knownValues);
-        TExpr[] ToArray();
-        TExpr[][] ToMatrix();
-    }
-
     public static class ExpressionEx
     {
         internal static readonly Type mathType = typeof(Math);

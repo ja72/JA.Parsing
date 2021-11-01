@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Linq;
 using JA.Expressions;
+using System.Text.Json.Serialization;
 
 namespace JA
 {
@@ -13,15 +14,13 @@ namespace JA
     {
         static int testIndex = 0;
         static void Main(string[] args)
-        {
-
+        {            
+            
             ParseExpressionDemo();
             CompileExpressionDemo();
             SimplifyExpressionDemo();
             AssignExpressionDemo();
             SystemOfEquationsDemo();
-            //FormattingTest();
-            //MultiVarTest();
             CalculusExprDemo();
             CalculusDerivativeDemo();
             CalculusSolveDemo();
@@ -33,7 +32,7 @@ namespace JA
         private static void CalculusExprDemo()
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
-            SymbolExpr x = "x", y="y";
+            VariableExpr x = "x", y="y";
 
             var f_input = "((x-1)*(x+1))/((x)^2+1)";
             Console.WriteLine($"input: {f_input}");
@@ -109,7 +108,7 @@ namespace JA
         static void SimplifyExpressionDemo()
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
-            SymbolExpr x = "x", y = "y";
+            VariableExpr x = "x", y = "y";
             //double a = 3, b = 0.25;
             Expr a = "a=3", b = "b=0.25";
 
@@ -149,8 +148,9 @@ namespace JA
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
             Console.WriteLine("Array Expression");
-            var text = "abs([(1-t)^3,3*(1-t)^2*t,3*t^2*(1-t),t^3])";
-            var expr = Expr.Parse(text);
+            var input = "abs([(1-t)^3,3*(1-t)^2*t,3*t^2*(1-t),t^3])";
+            var expr = Expr.Parse(input);
+            Console.WriteLine($"input: {input}");
             var y = expr.Eval(("t", 0.5));
             var fun = new Function("f", expr, "t");
             Console.WriteLine(fun);
@@ -162,6 +162,23 @@ namespace JA
                 var x = f(t);
                 Console.WriteLine($"{t,-12:g4} {x,-18:g4}");
             }
+
+            // TODO: How to implement vector functions?
+
+            input = "dot([x,2*y],[4-x,-1+y])";
+            Console.WriteLine($"input: {input}");
+            expr = Expr.Parse(input);
+            var f2 = new Function("f", expr, "x", "y");
+            Console.WriteLine(f2);
+
+            input = "dot(r_, r_) - outer(r_, r_)";
+            Console.WriteLine($"f(r_) = {input}");
+            Console.WriteLine("r_=[x,y,z]");
+            input = input.Replace("r_", "[x,y,z]");
+            expr = Expr.Parse(input);
+            var f3 = new Function("f", expr, "x", "y", "z");
+            Console.WriteLine(f3);
+
             Console.WriteLine();
         }
 
@@ -174,27 +191,44 @@ namespace JA
                 new Expr[] { 1/(1+tt^2), 1-(tt^2)/(1+tt^2) },
                 new Expr[] { tt/(1+tt^2), -1/(1+tt^2) }});
 
-            var y = expr.Eval((tt, 0.5));
-
-            var fun = new Function("f", expr, "t");
-            Console.WriteLine(fun);
-            var f = fun.Compile<QArg1>();
-            Console.WriteLine($"{"t",-12} {"f(t)",-12}");
+            var fexpr = new Function("f", expr, "t");
+            Console.WriteLine(fexpr);
+            var f = fexpr.Compile<QArg1>();
+            Console.WriteLine($"{"t",-12} {"f(t)"}");
             for (int i = 0; i <= 10; i++)
             {
                 var t = 0.10 * i;
-                var x = f(t);
-                Console.WriteLine($"{t,-12:g4} {x,-26:g4}");
+                var y = f(t);
+                Console.WriteLine($"{t,-12:g4} {y:g4}");
             }
 
-            var fp = fun.PartialDerivative(tt);
+            var fp = fexpr.PartialDerivative(tt);
             Console.WriteLine(fp);
+
+            Console.WriteLine("Solve a 2×2 system of equations.");
+            var A = Expr.Parse("[[7,t],[-t,3]]");
+            var b = Expr.Parse("[4,-1]");
+            Console.WriteLine($"Coefficient Matrix, A={A}");
+            Console.WriteLine($"Constant Vector, b={b}");
+            var x = Expr.Solve(A, b);
+            Console.WriteLine($"Solution Vector, x={x}");
+            var r = b - A*x;
+            Console.WriteLine($"Residual Vector, b-A*x={r}");
+            Console.WriteLine("Check residual for t=0..1");
+            Console.WriteLine($"{"t",-12} {"residual"}");
+            for (int i = 0; i <= 10; i++)
+            {
+                var t = 0.10 * i;
+                var rval = r.Eval(("t",t));
+                Console.WriteLine($"{t,-12:g4} {rval:g8}");
+            }
+
             Console.WriteLine();
         }
         static void CalculusDerivativeDemo()
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
-            SymbolExpr x = "x";
+            VariableExpr x = "x";
             foreach (var op in KnownUnaryDictionary.Defined)
             {
                 var f = Expr.Unary(op, x);
@@ -231,7 +265,7 @@ namespace JA
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
 
-            Expr.ClearVariables();
+            Expr.ClearParameters();
 
             var input = "a+b = (2*a+2*b)/2";
             var ex_1 = Expr.Parse(input);
@@ -241,7 +275,7 @@ namespace JA
 
             Console.WriteLine("Use = for assignment of constants.");
 
-            SymbolExpr a = "a", b= "b", c="c";
+            VariableExpr a = "a", b= "b", c="c";
             Expr lhs = Expr.Array(a,b,c);
             Expr rhs = "[1,2,3]";
             Console.WriteLine($"{lhs}={rhs}");
@@ -262,7 +296,7 @@ namespace JA
         static void SystemOfEquationsDemo()
         {
             Console.WriteLine($"*** DEMO [{++testIndex}] : {GetMethodName()} ***");
-            Expr.ClearVariables();
+            Expr.ClearParameters();
 
             Console.WriteLine("Define a 3×3 system of equations.");
             var system = Expr.Parse("[2*x-y+3*z=15, x + 3*z/2 = 3, x+3*y = 1]");
@@ -285,6 +319,12 @@ namespace JA
                 var r = b-A*x;
                 ShowVector("Residual Vector r=", r);
             }
+            else
+            {
+                Console.WriteLine("Something went wrong, could not extract linear system from equations above.");
+            }
+
+            
 
             Console.WriteLine();
 
